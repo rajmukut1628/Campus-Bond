@@ -134,8 +134,11 @@ const rules = {
     body("nagadNumber").optional({ values: "falsy" }).matches(PHONE_PATTERN),
   ],
 };
+export const resourceListVisibility = user => isAdmin(user) ? { visibility: { $ne: "deleted" } } : { ...published };
 export const manage = (u, item) =>
   isAdmin(u) || String(item.owner?._id || item.owner) === String(u._id);
+export const edit = (u, item) => u.role === "superadmin" || String(item.owner?._id || item.owner) === String(u._id);
+export const upcomingEvents = () => ({ ...published, status: "published", mode: { $ne: "recap" }, startsAt: { $gt: new Date() } });
 export function visible(u, item) {
   return (
     item &&
@@ -180,7 +183,7 @@ export function resourceRoutes() {
     const createRoles = roles("alumni", "admin", "superadmin");
     r.get(`/${kind}`, async (req, res) => {
       const filter = {
-        ...(isAdmin(req.user) ? { visibility: { $ne: "deleted" } } : published),
+        ...resourceListVisibility(req.user),
       };
       if (kind === "jobs" && !isAdmin(req.user))
         Object.assign(filter, {
@@ -193,6 +196,8 @@ export function resourceRoutes() {
         delete filter.status;
         delete filter.closesAt;
       }
+      if (kind === "events" && req.query.period === "upcoming") Object.assign(filter, upcomingEvents());
+      if (kind === "events" && req.query.period === "past") filter.$or = [{ mode: "recap" }, { startsAt: { $lte: new Date() } }];
       if (req.query.type && kind === "jobs")
         filter.type = String(req.query.type);
       if (req.query.q)
@@ -215,7 +220,11 @@ export function resourceRoutes() {
         items = items.map(item => ({...item.toObject(), total: totals.get(String(item._id)) || 0, remaining: Math.max(0, (item.goal || 0) - (totals.get(String(item._id)) || 0))}));
       }
       if (kind === "events") items = items.map((x) => eventView(x, req.user));
-      res.json({ items, total, page: p, pages: Math.ceil(total / 12) });
+      const eventCounts = kind === "events" ? {
+        allTotal: await Model.countDocuments(resourceListVisibility(req.user)),
+        myTotal: await Model.countDocuments({ owner: req.user._id, visibility: { $ne: "deleted" } }),
+      } : {};
+      res.json({ items, total, page: p, pages: Math.ceil(total / 12), ...eventCounts });
     });
     r.get(`/${kind}/:id`, id, async (req, res) => {
       const item = await Model.findById(req.params.id).populate(
@@ -296,9 +305,9 @@ export function resourceRoutes() {
               "Post not found",
             );
             assert(
-              manage(req.user, item),
+              edit(req.user, item),
               403,
-              "Only the owner or administrator can update this post",
+              "Only the owner or Super Administrator can update this post",
             );
             const query = { _id: item._id, visibility: { $ne: "deleted" } };
             if (kind === "events" && values.mode === "recap")
@@ -417,9 +426,9 @@ export function resourceRoutes() {
         let item = await Model.findById(req.params.id);
         assert(item && item.visibility !== "deleted", 404, "Post not found");
         assert(
-          manage(req.user, item),
+          edit(req.user, item),
           403,
-          "Only the owner or administrator can upload",
+          "Only the owner or Super Administrator can upload",
         );
         assert(req.file, 422, "Choose a supported picture up to 5 MB");
         let data;
@@ -496,9 +505,9 @@ export function resourceRoutes() {
         const item = await Model.findById(req.params.id).session(s);
         assert(item && item.visibility !== "deleted", 404, "Post not found");
         assert(
-          manage(req.user, item),
+          edit(req.user, item),
           403,
-          "Only the owner or administrator can remove",
+          "Only the owner or Super Administrator can remove",
         );
         item.cover = "";
         await item.save({ session: s });

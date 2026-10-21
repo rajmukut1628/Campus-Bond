@@ -48,6 +48,7 @@ const profileRules = [
   body("company").optional().isString().isLength({ max: 120 }),
   body("experience").optional().isString().isLength({ max: 3000 }),
   body("mentoring").optional().isBoolean(),
+  body("contactPreference").optional().isIn(["request-first", "open"]),
   body("socialLinks").optional().isArray({ max: 10 }),
   body("socialLinks.*.label").isString().trim().isLength({ min: 1, max: 40 }),
   body("socialLinks.*.url")
@@ -122,6 +123,7 @@ export function profileRoutes() {
         "company",
         "experience",
         "mentoring",
+        "contactPreference",
         "workExperience",
       );
     if (["admin", "superadmin"].includes(req.user.role)) keys.push("position");

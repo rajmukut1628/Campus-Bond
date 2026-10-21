@@ -1,3 +1,4 @@
+import { ChatAttachments } from "../components/ChatAttachment.jsx";
 import { useParams } from "react-router-dom";
 import React, { useState, useEffect } from "react";
 import { GraduationCap, CheckCircle2 } from "lucide-react";
@@ -17,114 +18,17 @@ import {
   date,
 } from "../components/ui.jsx";
 export function ConversionPage() {
-  const { user } = useAuth(),
-    [page, setPage] = useState(1),
-    [done, setDone] = useState(""),
-    { data, error, loading, reload } = useLoad("/conversions?page=" + page);
-  return (
-    <>
-      <Head
-        title="Your next chapter: Alumni"
-        description="Graduation changes your role, not your university history."
-      />
-      <div className="conversion-intro card">
-        <GraduationCap size={34} />
-        <div>
-          <h2>Keep your account. Grow your network.</h2>
-          <p>
-            Your ID, posts, jobs, event registrations and contribution history
-            remain on the same account. An Administrator reviews your graduation
-            details. Once approved, sign in again as Alumni.
-          </p>
-          <small>
-            Previous Student mentorships close on conversion; their history
-            remains stored. Alumni can opt in to mentor new students from their
-            profile.
-          </small>
-        </div>
-      </div>
-      <Notice error={error} />
-      {done && (
-        <div className="success" role="status">
-          {done}
-        </div>
-      )}
-      {user.role === "alumni" ? (
-        <div className="success">
-          <CheckCircle2 size={18} />
-          Your account is already Alumni.
-        </div>
-      ) : data?.pending ? (
-        <div className="management-help">
-          <p>
-            Your conversion request is awaiting review. You can continue using
-            your Student account.
-          </p>
-        </div>
-      ) : (
-        !loading && (
-          <section className="card">
-            <h2>Request conversion</h2>
-            <p>
-              {user.department || "Department not assigned"} ·{" "}
-              {user.batch ? "Batch " + user.batch : "Batch not assigned"} ·{" "}
-              {user.universityId}
-            </p>
-            <Form
-              fields={[
-                { name: "degree", label: "Completed degree or qualification" },
-                {
-                  name: "graduationYear",
-                  label: "Graduation year",
-                  type: "number",
-                  min: 1950,
-                  max: new Date().getFullYear(),
-                },
-                {
-                  name: "reason",
-                  label:
-                    "Graduation details for the reviewer (minimum 10 characters)",
-                  area: true,
-                  max: 2000,
-                },
-              ]}
-              submit="Send conversion request"
-              onSubmit={async (values) => {
-                await api.post("/conversions", values);
-                setDone("Your Alumni conversion request has been sent.");
-                setPage(1);
-                reload();
-              }}
-            />
-          </section>
-        )
-      )}
-      <h2>Request history</h2>
-      {loading ? (
-        <Loading />
-      ) : data?.items.length ? (
-        data.items.map((item) => (
-          <article className="card" key={item._id}>
-            <div className="row between">
-              <h2>
-                {item.degree} · {item.graduationYear}
-              </h2>
-              <Status value={item.status} />
-            </div>
-            <p className="preserve">{item.reason}</p>
-            <small>Requested {date(item.createdAt)}</small>
-            {item.reviewedAt && <small>Reviewed {date(item.reviewedAt)}</small>}
-            {item.reviewNote && (
-              <p className="review-note">Reviewer: {item.reviewNote}</p>
-            )}
-          </article>
-        ))
-      ) : (
-        <Empty>No conversion requests yet.</Empty>
-      )}
-      <Pager {...{ data, page, setPage }} numbered />
-    </>
-  );
+  const {user}=useAuth(), [page,setPage]=useState(1), [done,setDone]=useState("");
+  const {data,error,loading,reload}=useLoad("/conversions?page="+page);
+  return <div className="conversion-popup">
+    <div className="conversion-popup-intro"><span className="conversion-popup-icon"><GraduationCap size={26}/></span><div><span className="eyebrow">YOUR NEXT CHAPTER</span><h3>{user.role === "alumni" ? "Your Alumni account" : "Ready to become an Alumni?"}</h3><p>{user.role === "alumni" ? "Your account already has Alumni access." : "Submit your completed degree details for administrator review."}</p></div></div>
+    <Notice error={error}/>{done && <div className="success" role="status">{done}</div>}
+    {loading ? <Loading/> : user.role === "alumni" ? <div className="conversion-current-status"><CheckCircle2 size={18}/><strong>Alumni account</strong></div> : data?.pending ? <div className="conversion-current-status"><Status value="pending"/><p>Your request is awaiting review. You can keep using your Student account.</p></div> : <>
+      <p className="conversion-essential-note">Approval keeps your account and posts. Existing Student mentorships close and remain in your conversation archive.</p>
+      <Form fields={[{name:"degree",label:"Completed degree",max:200},{name:"graduationYear",label:"Graduation year",type:"number",min:1950,max:new Date().getFullYear()},{name:"reason",label:"Graduation details for review",area:true,minLength:10,max:2000}]} submit="Send conversion request" onSubmit={async values=>{await api.post("/conversions",values);setDone("Request sent for review.");setPage(1);reload();}}/>
+    </>}
+    {!!data?.items.length && <details className="conversion-request-history"><summary>Request history <span>{data.total ?? data.items.length}</span></summary>{data.items.map(item=><article key={item._id} className="conversion-history-item"><div className="row between"><strong>{item.degree} / {item.graduationYear}</strong><Status value={item.status}/></div><small>Requested {date(item.createdAt)}</small>{item.reviewedAt && <small>{item.status === "accepted" ? "Approved" : "Reviewed"} by {item.reviewedBy?.name || "Reviewer unavailable"} / {date(item.reviewedAt)}</small>}{item.reviewNote && <p>{item.reviewNote}</p>}</article>)}<Pager {...{data,page,setPage}} numbered/></details>}
+  </div>;
 }
 export function ConversionReview() {
   const [status, setStatus] = useState("pending"),
@@ -210,6 +114,7 @@ export function ConversionReview() {
             </h3>
             <p className="preserve">{item.reason}</p>
             <small>Requested {date(item.createdAt)}</small>
+            {item.reviewedAt && <small>{item.status === "accepted" ? "Approved" : "Reviewed"} by {item.reviewedBy?.name || "Reviewer unavailable"} {item.reviewedBy?.role && `(${item.reviewedBy.role})`} · {date(item.reviewedAt)}</small>}
             {item.reviewNote && (
               <p className="review-note">Review: {item.reviewNote}</p>
             )}
@@ -314,6 +219,7 @@ export function ConversationArchive() {
               [...data.items].reverse().map((message) => (
                 <article className="archive-message" key={message._id}>
                   <strong>{message.sender?.name}</strong>
+                  {!message.deletedAt && (message.attachment || message.attachments?.length) && <ChatAttachments message={message}/>}
                   <p className="preserve">{message.body}</p>
                   <small>{date(message.createdAt)}</small>
                 </article>

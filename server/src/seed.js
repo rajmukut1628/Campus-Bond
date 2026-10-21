@@ -12,10 +12,10 @@ try {
   ])
     if (!process.env[key]) throw new Error(`${key} is required`);
   if (
-    process.env.SEED_ADMIN_PASSWORD.length < 11 ||
+    process.env.SEED_ADMIN_PASSWORD.length < 8 ||
     process.env.SEED_ADMIN_PASSWORD.length > 72
   )
-    throw new Error("Seed password must be 11–72 characters");
+    throw new Error("Seed password must be 8–72 characters");
   await mongoose.connect(config.mongoUri);
   await User.init();
   if (await User.exists({ role: "superadmin" }))

@@ -1,10 +1,10 @@
+import "./theme.css";
 import { canAccessRoute } from "./route-access.js";
 import { Landing } from "./pages/Landing.jsx";
 import { Feed, FeedPost } from "./pages/Feed.jsx";
 import { Recovery } from "./pages/Recovery.jsx";
 import { Profile, MemberProfile } from "./pages/Profiles.jsx";
 import {
-  ConversionPage,
   ConversionReview,
   ConversationArchive,
 } from "./pages/Conversions.jsx";
@@ -24,6 +24,8 @@ import {
 } from "react-router-dom";
 import axios from "axios";
 import {
+  PanelLeftClose,
+  PanelLeftOpen,
   GraduationCap,
   LayoutDashboard,
   Activity,
@@ -110,6 +112,16 @@ function Shell() {
     [open, setOpen] = useState(false),
     location = useLocation(),
     navigate = useNavigate();
+  const [compact, setCompact] = useState(() => { try { return localStorage.getItem("nub-sidebar-compact") === "true"; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem("nub-sidebar-compact", String(compact)); } catch {} }, [compact]);
+  useEffect(() => {
+    if (!open) return;
+    const close = event => { if (event.key === "Escape") setOpen(false); };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", close);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener("keydown", close); };
+  }, [open]);
   const [unread, setUnread] = useState(0);
   useEffect(() => {
     if (!user) return;
@@ -136,9 +148,10 @@ function Shell() {
       ["student", "alumni"].includes(user.role),
   );
   return (
-    <div className="app-shell">
-      <aside className={open ? "sidebar open" : "sidebar"}>
-        <Brand />
+    <div className={`app-shell premium-navigation ${compact ? "sidebar-compact" : ""}`}>
+      {open && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setOpen(false)}/>}
+      <aside id="primary-sidebar" className={open ? "sidebar open" : "sidebar"} aria-label="Main navigation">
+        <div className="sidebar-brand-row"><Brand /><button className="sidebar-collapse" onClick={() => setCompact(v => !v)} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"} title={compact ? "Expand sidebar" : "Collapse sidebar"}>{compact ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button><button className="sidebar-mobile-close" aria-label="Close navigation" onClick={() => setOpen(false)}><X size={19}/></button></div>
         <div className="workspace-label">YOUR CAMPUS COMMUNITY</div>
         <nav>
           {items.map(([path, label, Icon]) => (
@@ -146,69 +159,60 @@ function Shell() {
               key={path}
               to={`/app${path ? "/" + path : ""}`}
               end={path === ""}
+              title={label}
+              aria-label={path === "notifications" ? `${label}, ${unread} unread` : label}
+              onClick={() => setOpen(false)}
             >
               <Icon size={19} />
-              {label}
+              <span className="nav-label">{label}</span>
+              {path === "notifications" && unread > 0 && <span className="sidebar-unread">{unread > 99 ? "99+" : unread}</span>}
             </NavLink>
           ))}
-          {user.role === "student" && (
-            <NavLink to="/app/conversion">
-              <GraduationCap size={19} />
-              Alumni conversion
-            </NavLink>
-          )}
           {admin(user) && (
             <>
               <div className="workspace-label">ADMINISTRATION</div>
-              <NavLink to="/app/users">
+              <NavLink to="/app/users" title="Manage members" aria-label="Manage members" onClick={() => setOpen(false)}>
                 <Users size={19} />
-                Manage members
+                <span className="nav-label">Manage members</span>
               </NavLink>
-              <NavLink to="/app/alumni-requests">
+              <NavLink to="/app/alumni-requests" title="Alumni requests" aria-label="Alumni requests" onClick={() => setOpen(false)}>
                 <GraduationCap size={19} />
-                Alumni requests
+                <span className="nav-label">Alumni requests</span>
               </NavLink>
-              <NavLink to="/app/verified">
+              <NavLink to="/app/verified" title="Verified accounts" aria-label="Verified accounts" onClick={() => setOpen(false)}>
                 <ShieldCheck size={19} />
-                Verified accounts
+                <span className="nav-label">Verified accounts</span>
               </NavLink>
             </>
           )}
           {user.role === "superadmin" && (
             <>
-              <NavLink to="/app/admins">
+              <NavLink to="/app/admins" title="Manage admins" aria-label="Manage admins" onClick={() => setOpen(false)}>
                 <ShieldCheck size={19} />
-                Manage admins
+                <span className="nav-label">Manage admins</span>
               </NavLink>
-              <NavLink to="/app/activity">
+              <NavLink to="/app/activity" title="Activity" aria-label="Activity" onClick={() => setOpen(false)}>
                 <Activity size={19} />
-                Activity
+                <span className="nav-label">Activity</span>
               </NavLink>
             </>
           )}
         </nav>
         <div className="sidebar-bottom">
-          <div className="community-card">
-            <Sparkles size={19} />
-            <strong>Better, together.</strong>
-            <p>Your experience could be someone’s next big step.</p>
-            <Link to="/app/profile">
-              Complete your profile <ArrowUpRight size={14} />
-            </Link>
-          </div>
-          <NavLink to="/app/profile">
+          <NavLink to="/app/profile" title="Profile & settings" aria-label="Profile & settings" onClick={() => setOpen(false)}>
             <Settings size={18} />
-            Profile & settings
+            <span className="nav-label">Profile & settings</span>
           </NavLink>
           <Action
+            aria-label="Sign out"
+            title="Sign out"
             run={async () => {
               await api.post("/auth/logout");
-              setUser(null);
-              navigate("/", { replace: true, state: null });
+              window.location.replace("/");
             }}
           >
             <LogOut size={18} />
-            Sign out
+            <span className="nav-label">Sign out</span>
           </Action>
           <div className="user-chip">
             <Avatar user={user} />
@@ -222,11 +226,13 @@ function Shell() {
           </div>
         </div>
       </aside>
-      <div className="main-shell">
+      <div className={`main-shell ${location.pathname.replace(/\/$/, "") === "/app" ? "overview-shell" : location.pathname === "/app/notifications" ? "notifications-shell" : location.pathname.startsWith("/app/messages") ? "messages-shell" : location.pathname.startsWith("/app/members/") ? "public-profile-shell" : location.pathname === "/app/feed" ? "feed-shell" : ""}`}>
         <header className="topbar">
           <button
             className="mobile-menu"
             aria-label="Toggle navigation"
+            aria-expanded={open}
+            aria-controls="primary-sidebar"
             onClick={() => setOpen(!open)}
           >
             <Menu size={20} />
@@ -272,7 +278,7 @@ function Shell() {
           )}
           <Routes>
             <Route index element={<Dashboard />} />
-            <Route path="feed" element={<Feed />} />
+            <Route path="feed" element={<Feed key={`${user._id}:${user.role}`} />} />
             <Route path="feed/:kind/:id" element={<FeedPost />} />
             <Route path="mentors" element={<Mentors />} />
             <Route path="requests" element={<Requests />} />
@@ -301,7 +307,7 @@ function Shell() {
               path="conversion"
               element={
                 ["student", "alumni"].includes(user.role) ? (
-                  <ConversionPage />
+                  <Navigate to="/app/profile?conversion=true" replace />
                 ) : (
                   <Unauthorized />
                 )

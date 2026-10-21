@@ -374,13 +374,15 @@ function Modal({ title, onClose, children, closeDisabled = false }) {
     </div>
   );
 }
-function Action({ children, run, className = "" }) {
+function Action({ children, run, className = "", title, "aria-label": ariaLabel }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   return (
     <>
       <button
         className={className}
+        title={title}
+        aria-label={ariaLabel}
         disabled={busy}
         onClick={async () => {
           setBusy(true);
@@ -403,7 +405,7 @@ function Action({ children, run, className = "" }) {
 function Brand() {
   const { user } = useAuth();
   return (
-    <Link className="brand" to={user ? "/app/feed" : "/"}>
+    <Link className="brand" aria-label="NUB Connect" to={user ? "/app/feed" : "/"}>
       <span className="brand-mark">
         <GraduationCap size={25} />
       </span>

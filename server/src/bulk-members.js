@@ -42,7 +42,7 @@ export function bulkMemberRoutes() {
                 field: e.path,
                 message:
                   e.path === "password"
-                    ? "Use at least 11 characters and at most 72 UTF-8 bytes"
+                    ? "Use at least 8 characters and at most 72 UTF-8 bytes"
                     : e.path === "email"
                       ? "Enter a valid email address"
                       : e.path === "role"

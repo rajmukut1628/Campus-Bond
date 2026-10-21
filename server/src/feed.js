@@ -63,6 +63,7 @@ async function stats(item, kind, user) {
     shares,
     myReaction: mine?.reaction || "",
     viewed: !!mine?.viewedAt,
+    favorite: !!mine?.favoritedAt,
   };
 }
 async function card(item, kind, user) {
@@ -83,15 +84,59 @@ async function card(item, kind, user) {
     stats: await stats(o, kind, user),
   };
 }
+// Batch list hydration avoids repeating author/stat queries for every card.
+async function cards(rows, user) {
+  if (!rows.length) return [];
+  const documents = new Map();
+  await Promise.all(Object.keys(models).map(async kind => {
+    const ids = rows.filter(row => row.kind === kind).map(row => row._id);
+    if (!ids.length) return;
+    const found = await models[kind].find({ _id: { $in: ids } }).select("-registrations").lean();
+    for (const item of found) if (visible(user, item)) documents.set(`${kind}:${item._id}`, item);
+  }));
+  const selected = rows.filter(row => documents.has(`${row.kind}:${row._id}`));
+  if (!selected.length) return [];
+  const match = { $or: selected.map(row => ({ kind: row.kind, record: row._id })) };
+  const idGroup = { kind: "$kind", record: "$record" };
+  const ids = [...documents.values()].map(item => item.author || item.owner);
+  const [authors, reactions, comments, shares, mine, donations] = await Promise.all([
+    User.find({ _id: { $in: ids } }).select("name role avatar").lean(),
+    FeedInteraction.aggregate([{ $match: { ...match, reaction: { $nin: ["", null] } } }, { $group: { _id: { ...idGroup, reaction: "$reaction" }, count: { $sum: 1 } } }]),
+    FeedComment.aggregate([{ $match: match }, { $group: { _id: idGroup, count: { $sum: 1 } } }]),
+    ShareVisit.aggregate([{ $match: match }, { $group: { _id: idGroup, count: { $sum: 1 } } }]),
+    FeedInteraction.find({ ...match, user: user._id }).select("kind record reaction viewedAt favoritedAt").lean(),
+    Contribution.aggregate([{ $match: { donation: { $in: selected.filter(row => row.kind === "donations").map(row => row._id) }, status: "approved" } }, { $group: { _id: "$donation", total: { $sum: "$amount" } } }]),
+  ]);
+  const authorMap = new Map(authors.map(author => [String(author._id), author]));
+  const key = item => `${item.kind}:${item.record}`;
+  const commentMap = new Map(comments.map(item => [key(item._id), item.count]));
+  const shareMap = new Map(shares.map(item => [key(item._id), item.count]));
+  const mineMap = new Map(mine.map(item => [key(item), item]));
+  const donationMap = new Map(donations.map(item => [String(item._id), item.total]));
+  const reactionMap = new Map();
+  for (const item of reactions) {
+    const id = key(item._id);
+    if (!reactionMap.has(id)) reactionMap.set(id, {});
+    reactionMap.get(id)[item._id.reaction] = item.count;
+  }
+  return selected.map(row => {
+    const id = `${row.kind}:${row._id}`, item = documents.get(id), interaction = mineMap.get(id);
+    const total = donationMap.get(String(item._id)) || 0;
+    return { ...item, kind: row.kind, author: authorMap.get(String(item.author || item.owner)) || null,
+      body: item.body || item.description,
+      ...(row.kind === "donations" && item.mode !== "information" ? { total, remaining: Math.max(0, item.goal - total) } : {}),
+      stats: { reactions: reactionMap.get(id) || {}, comments: commentMap.get(id) || 0, shares: shareMap.get(id) || 0, myReaction: interaction?.reaction || "", viewed: !!interaction?.viewedAt, favorite: !!interaction?.favoritedAt } };
+  });
+}
 export function feedRoutes() {
   const r = Router();
-  r.get("/feed/options", (req, res) => res.json({ topics: TOPICS }));
+  r.get("/feed/options", (req, res) => res.json({ topics: TOPICS, feedCutoff: new Date().toISOString() }));
   r.get(
     "/feed",
     query("cutoff").optional().isISO8601(),
     query("mode")
       .optional()
-      .isIn(["for-you", "latest", "viewed", "moderation"]),
+      .isIn(["for-you", "latest", "favorites", "viewed", "moderation"]),
     query("page").optional().isInt({ min: 1, max: 100000 }),
     query("visibility").optional().isIn(["published", "hidden", "archived"]),
     validate,
@@ -123,7 +168,7 @@ export function feedRoutes() {
             pipeline: [{ $match: match }, projection(kind)],
           },
         });
-      pipeline.push({
+      if (["for-you", "viewed", "favorites"].includes(mode)) pipeline.push({
         $lookup: {
           from: FeedInteraction.collection.name,
           let: { record: "$_id", kind: "$kind" },
@@ -158,6 +203,7 @@ export function feedRoutes() {
               }
             : { "interaction.viewedAt": { $exists: false } },
         });
+      if (mode === "favorites") pipeline.push({ $match: { "interaction.favoritedAt": { $exists: true } } }, { $addFields: { savedAt: { $max: "$interaction.favoritedAt" } } });
       if (mode === "viewed")
         pipeline.push({
           $match: { "interaction.viewedAt": { $exists: true } },
@@ -175,27 +221,22 @@ export function feedRoutes() {
                 : { $literal: 0 },
           },
         },
-        { $sort: { score: -1, createdAt: -1, _id: -1, kind: 1 } },
+        { $sort: mode === "favorites" ? { savedAt: -1, createdAt: -1, _id: -1, kind: 1 } : { score: -1, createdAt: -1, _id: -1, kind: 1 } },
         {
           $facet: {
             count: [{ $count: "total" }],
-            items: [{ $skip: (page - 1) * 12 }, { $limit: 12 }],
+            items: [{ $skip: (page - 1) * 20 }, { $limit: 20 }],
           },
         },
       );
       const [result] = await Post.aggregate(pipeline);
-      const items = [];
-      for (const row of result.items) {
-        const item = await models[row.kind].findById(row._id);
-        if (item && visible(req.user, item))
-          items.push(await card(item, row.kind, req.user));
-      }
+      const items = await cards(result.items, req.user);
       const total = result.count[0]?.total || 0;
       res.set("Cache-Control", "no-store").json({
         items,
         total,
         page,
-        pages: Math.ceil(total / 12),
+        pages: Math.ceil(total / 20),
         interests: req.user.interests || [],
       });
     },
@@ -205,11 +246,18 @@ export function feedRoutes() {
       item: await card(await readable(req), req.params.kind, req.user),
     }),
   );
+  r.put("/feed/:kind/:id/favorite", refRules, body("favorite").custom(value => typeof value === "boolean"), validate, async (req, res) => {
+    await readable(req);
+    const filter = { ...key(req), user: req.user._id };
+    if (req.body.favorite) await FeedInteraction.updateOne(filter, { $set: { favoritedAt: new Date() } }, { upsert: true });
+    else await FeedInteraction.updateOne(filter, { $unset: { favoritedAt: 1 } });
+    res.json({ favorite: req.body.favorite });
+  });
   r.post("/feed/:kind/:id/view", refRules, async (req, res) => {
     await readable(req);
     await FeedInteraction.updateOne(
       { ...key(req), user: req.user._id },
-      { $set: { viewedAt: new Date() } },
+      [{ $set: { viewedAt: { $ifNull: ["$viewedAt", new Date()] } } }],
       { upsert: true },
     );
     res.json({ message: "Viewed" });
@@ -374,9 +422,9 @@ export function feedRoutes() {
       const item = await Post.findById(req.params.id);
       assert(item && item.visibility !== "deleted", 404, "Post not found");
       assert(
-        isAdmin(req.user) || String(item.author) === String(req.user._id),
+        req.user.role === "superadmin" || String(item.author) === String(req.user._id),
         403,
-        "Only the author or administrator can edit",
+        "Only the author or Super Administrator can edit",
       );
       item.body = req.body.body;
       if (req.body.topics) item.topics = req.body.topics;

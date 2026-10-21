@@ -71,6 +71,8 @@ const userSchema = new Schema(
     linkedin: text(500),
     avatar: text(500),
     mentoring: { type: Boolean, default: true },
+    contactPreference: { type: String, enum: ["request-first", "open"], default: "request-first" },
+    directMessageVersion: { type: Number, default: 0 },
   },
   options,
 );
@@ -130,13 +132,22 @@ const mentorshipSchema = new Schema(
 );
 mentorshipSchema.index({ student: 1, mentor: 1 }, { unique: true });
 export const Mentorship = model("Mentorship", mentorshipSchema);
+const chatAttachmentSchema = new Schema({ id: ref("MessageAttachment"), name: text(180, true), mimeType: text(80, true), size: { type: Number, required: true } }, { _id: false });
+export const MessageAttachment = model("MessageAttachment", new Schema({
+  conversation: { type: Schema.Types.ObjectId, required: true }, message: { type: Schema.Types.ObjectId, required: true },
+  kind: { type: String, enum: ["mentorship", "direct"], required: true },
+  name: text(180, true), mimeType: text(80, true), size: { type: Number, required: true }, data: { type: Buffer, required: true, select: false }, thumbnail: { type: Buffer, select: false },
+}, options));
+MessageAttachment.schema.index({ message: 1, _id: 1 });
 export const Message = model(
   "Message",
   new Schema(
     {
       mentorship: ref("Mentorship"),
       sender: ref("User"),
-      body: text(4000, true),
+      body: text(4000),
+      attachment: { type: chatAttachmentSchema, default: undefined },
+      attachments: { type: [chatAttachmentSchema], default: undefined },
       deletedAt: Date,
     },
     options,
@@ -144,6 +155,18 @@ export const Message = model(
 );
 Message.schema.index({ mentorship: 1, createdAt: -1 });
 Message.schema.index({ mentorship: 1, sender: 1 });
+export const DirectConversation = model("DirectConversation", new Schema({
+  pairKey: { ...text(60, true), unique: true },
+  audience: { type: String, enum: ["members", "admins"], default: "members" },
+  members: [{ type: Schema.Types.ObjectId, ref: "User", required: true }],
+  openedBy: ref("User"),
+  accessVersion: { type: Number, default: 0 },
+}, options));
+DirectConversation.schema.index({ members: 1, updatedAt: -1 });
+export const DirectMessage = model("DirectMessage", new Schema({
+  conversation: ref("DirectConversation"), sender: ref("User"), body: text(4000), attachment: { type: chatAttachmentSchema, default: undefined }, attachments: { type: [chatAttachmentSchema], default: undefined }, deletedAt: Date,
+}, options));
+DirectMessage.schema.index({ conversation: 1, createdAt: -1, _id: -1 });
 export const Post = model(
   "Post",
   new Schema(
@@ -444,6 +467,7 @@ export const FeedInteraction = model(
       record: { type: Schema.Types.ObjectId, required: true },
       user: ref("User"),
       viewedAt: Date,
+      favoritedAt: Date,
       reaction: {
         type: String,
         enum: ["like", "love", "celebrate", "support", "insightful", ""],
@@ -493,6 +517,9 @@ export const ShareVisit = model(
 ShareVisit.schema.index({ kind: 1, record: 1, viewer: 1 }, { unique: true });
 
 export const models = {
+  MessageAttachment,
+  DirectConversation,
+  DirectMessage,
   EmailToken,
   CoverAsset,
   FeedInteraction,

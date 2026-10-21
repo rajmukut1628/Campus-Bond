@@ -22,7 +22,7 @@ import {
 const tx = (fn) => mongoose.connection.transaction(fn);
 const passwordRules = body("password")
   .isString()
-  .isLength({ min: 11, max: 72 })
+  .isLength({ min: 8, max: 72 })
   .custom((v) => Buffer.byteLength(v, "utf8") <= 72);
 export const provisionRules = [
   body("name").isString().trim().isLength({ min: 2, max: 100 }),
@@ -115,6 +115,7 @@ export function studentConversionRoutes() {
       res.json({
         ...(await paginated(ConversionRequest, { student: req.user._id }, req, {
           sort: { createdAt: -1, _id: -1 },
+          populate: { path: "reviewedBy", select: "name role" },
         })),
         pending: (await ConversionRequest.exists({
           student: req.user._id,
@@ -255,6 +256,7 @@ export function conversionAdminRoutes(config) {
       const data = await paginated(ConversionRequest, filter, req, {
         sort: { createdAt: -1, _id: -1 },
       });
+      await ConversionRequest.populate(data.items, { path: "reviewedBy", select: "name role" });
       await ConversionRequest.populate(data.items, {
         path: "student",
         select: "name email universityId department batch avatar role status",

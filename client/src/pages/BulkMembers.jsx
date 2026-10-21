@@ -224,7 +224,7 @@ export function BulkMembers({ options, onClose, onCreated }) {
                 <input
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
-                  minLength={11}
+                  minLength={8}
                   maxLength={72}
                   value={password}
                   onChange={(e) => {
@@ -246,7 +246,7 @@ export function BulkMembers({ options, onClose, onCreated }) {
                 </button>
               </span>
               <small>
-                Minimum 11 characters. Passwords stay out of CSV templates and
+                Minimum 8 characters. Passwords stay out of CSV templates and
                 result downloads.
               </small>
             </label>

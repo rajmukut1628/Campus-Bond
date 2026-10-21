@@ -20,7 +20,7 @@ export function Recovery({ mode = "forgot-password" }) {
         </h1>
         <p>
           {reset
-            ? "Choose a new password of at least 11 characters."
+            ? "Choose a new password of at least 8 characters."
             : "Enter your account email. We’ll send a secure password recovery link if it matches an eligible account."}
         </p>
         {message ? (
@@ -37,7 +37,7 @@ export function Recovery({ mode = "forgot-password" }) {
                       name: "password",
                       label: "New password",
                       type: "password",
-                      minLength: 11,
+                      minLength: 8,
                     },
                   ]
                 : [{ name: "email", type: "email" }]

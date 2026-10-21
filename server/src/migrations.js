@@ -1,5 +1,10 @@
-import { User, Ownership, VerifiedUser } from "./models.js";
+import { User, Ownership, VerifiedUser, MessageAttachment } from "./models.js";
 export async function migrateManagement() {
+  // Remove only the legacy single-file constraint; attachment data is retained.
+  const attachmentIndexes = await MessageAttachment.collection.indexes();
+  for (const index of attachmentIndexes)
+    if (index.unique && index.key.message === 1 && Object.keys(index.key).length === 1)
+      await MessageAttachment.collection.dropIndex(index.name);
   for (const model of [User, VerifiedUser])
     await model.collection.updateMany({ status: { $exists: false } }, [
       {

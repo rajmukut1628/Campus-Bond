@@ -1,3 +1,5 @@
+import { ChatAttachments } from "../components/ChatAttachment.jsx";
+import { NetworkScene } from "./Landing.jsx";
 import { loginDestination } from "../route-access.js";
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import ReactDOM from "react-dom/client";
@@ -14,6 +16,8 @@ import {
 } from "react-router-dom";
 import axios from "axios";
 import {
+  Paperclip,
+  FileText,
   GraduationCap,
   LayoutDashboard,
   Users,
@@ -69,10 +73,11 @@ function Login() {
     location = useLocation();
   if (user) return <Navigate to={loginDestination()} replace />;
   return (
-    <div className="auth-page">
+    <div className="auth-page login-page login-unified">
+      <div className="login-background-scene" aria-hidden="true"><NetworkScene /></div>
       <div className="auth-story">
         <Brand />
-        <div>
+        <div className="login-story-content">
           <span className="eyebrow">GROW TOGETHER</span>
           <h1>
             A connection today.
@@ -115,54 +120,25 @@ function Login() {
 function Dashboard() {
   const { user } = useAuth(),
     { data, loading, error } = useLoad("/dashboard");
+  const roleHero = {
+    student: { tag: "YOUR NEXT CHAPTER", title: "Find your direction.", accent: "Grow with guidance.", text: "Connect with alumni mentors and discover opportunities for your future.", label: "Find a mentor", path: "/app/mentors", Icon: GraduationCap, orbit: "LEARN & GROW" },
+    alumni: { tag: "YOUR EXPERIENCE MATTERS", title: "Share your journey.", accent: "Inspire what comes next.", text: "Support fellow members, exchange guidance and share new opportunities.", label: "Your mentorships", path: "/app/requests", Icon: HeartHandshake, orbit: "GUIDE & CONNECT" },
+    admin: { tag: "YOUR COMMUNITY WORKSPACE", title: "Support your members.", accent: "Keep your community moving.", text: "Manage membership, review requests and help your university community thrive.", label: "Manage members", path: "/app/users", Icon: Users, orbit: "SUPPORT & MANAGE" },
+    superadmin: { tag: "YOUR PLATFORM OVERVIEW", title: "Lead with clarity.", accent: "Build lasting connections.", text: "Oversee platform activity, support administrators and guide your community.", label: "Manage administrators", path: "/app/admins", Icon: ShieldCheck, orbit: "LEAD & OVERSEE" },
+  }[user.role];
   if (loading) return <Loading />;
   return (
-    <>
-      <Head
-        eyebrow={`${user.role.toUpperCase()} WORKSPACE`}
-        title={`Welcome back, ${user.name.split(" ")[0]}.`}
-        description="A little connection can open a world of possibility."
-      />
+    <div className="overview-compact">
       <Notice error={error} />
-      <section className="hero-banner">
-        <div>
-          <div className="eyebrow">YOUR NEXT CHAPTER STARTS HERE</div>
-          <h2>
-            Great journeys.
-            <br />
-            <span>Stronger connections.</span>
-          </h2>
-          <p>
-            Find guidance, share what you know, and build
-            <br className="desktop" /> what comes next — together.
-          </p>
-          <Link
-            className="button primary"
-            to={admin(user) ? "/app/users" : "/app/mentors"}
-          >
-            {admin(user) ? "Manage your community" : "Explore your mentors"}{" "}
-            <ArrowUpRight size={17} />
-          </Link>
+      <section className={`dashboard-ambient-hero dashboard-role-${user.role}`}>
+        <div className="dashboard-hero-copy">
+          <div className="eyebrow">{roleHero.tag}</div>
+          <h2>{roleHero.title}<br/><span>{roleHero.accent}</span></h2>
+          <p>{roleHero.text}</p>
+          <Link className="button primary" to={roleHero.path}>{roleHero.label}<ArrowUpRight size={17}/></Link>
         </div>
-        <div className="orbit-art" aria-hidden="true">
-          <div className="orbit o1" />
-          <div className="orbit o2" />
-          <div className="orbit o3" />
-          <span className="orbit-center">
-            <GraduationCap size={47} />
-          </span>
-          <span className="orbit-node n1">
-            <Users size={25} />
-          </span>
-          <span className="orbit-node n2">
-            <BriefcaseBusiness size={24} />
-          </span>
-          <span className="orbit-node n3">
-            <HeartHandshake size={24} />
-          </span>
-          <span className="orbit-label">
-            A network for life <Sparkles size={14} />
-          </span>
+        <div className="dashboard-hero-scene welcome-background-orbit" aria-hidden="true">
+          <NetworkScene CenterIcon={roleHero.Icon} label={roleHero.orbit}/>
         </div>
       </section>
       <div className="stats-grid">
@@ -174,7 +150,7 @@ function Dashboard() {
             "requests",
           ],
           [data?.stats.jobs, "Open opportunities", BriefcaseBusiness, "jobs"],
-          [data?.stats.events, "Upcoming events", CalendarDays, "events"],
+          [data?.stats.events, "Total events", CalendarDays, "events?mine=false"],
           [
             data?.stats.notifications,
             "Unread notifications",
@@ -196,81 +172,7 @@ function Dashboard() {
           </Link>
         ))}
       </div>
-      <div className="dashboard-columns">
-        <section>
-          <div className="section-title">
-            <h2>From your community</h2>
-            <Link to="/app/feed">
-              View newsfeed <ArrowRight size={15} />
-            </Link>
-          </div>
-          {data?.recent.length ? (
-            data.recent.map((post) => (
-              <article className="card feed-card" key={post._id}>
-                <div className="row">
-                  <Avatar user={post.author} />
-                  <div>
-                    <strong>{post.author?.name || "Former member"}</strong>
-                    <small>
-                      {post.author?.role} · {date(post.createdAt)}
-                    </small>
-                  </div>
-                </div>
-                <p className="preserve">{post.body}</p>
-              </article>
-            ))
-          ) : (
-            <Empty>Be the first to share something with your community.</Empty>
-          )}
-        </section>
-        <aside>
-          <div className="section-title">
-            <h2>Make your next move</h2>
-          </div>
-          <div className="card quick-links">
-            {[
-              [
-                "mentors",
-                "Find your people",
-                "Learn from those who have been there.",
-                Users,
-              ],
-              [
-                "events",
-                "Be part of something",
-                "Discover what’s happening on campus.",
-                CalendarDays,
-              ],
-              [
-                "donations",
-                "Make a difference",
-                "Support a cause in your community.",
-                HeartHandshake,
-              ],
-            ].map(([p, title, desc, Icon]) => (
-              <Link to={`/app/${p}`} key={p}>
-                <Icon size={22} />
-                <div>
-                  <strong>{title}</strong>
-                  <p>{desc}</p>
-                </div>
-                <ChevronRight size={18} />
-              </Link>
-            ))}
-          </div>
-          <div className="note-card">
-            <span className="eyebrow">A SMALL STEP, A BIG DIFFERENCE</span>
-            <h3>Your story is still unfolding.</h3>
-            <p>
-              Keep your profile up to date so the right people can find you.
-            </p>
-            <Link to="/app/profile">
-              Update your profile <ArrowUpRight size={15} />
-            </Link>
-          </div>
-        </aside>
-      </div>
-    </>
+    </div>
   );
 }
 function Feed() {
@@ -355,18 +257,14 @@ function Feed() {
   );
 }
 function Mentors() {
-  const { user } = useAuth(),
-    [q, setQ] = useState(""),
+  const navigate = useNavigate();
+  const [q, setQ] = useState(""),
     [page, setPage] = useState(1),
     { data, loading, error, reload } = useLoad(
       `/mentors?q=${encodeURIComponent(q)}&page=${page}`,
-    ),
-    [submitted, setSubmitted] = useState({}),
-    [selected, setSelected] = useState(null),
-    [sent, setSent] = useState("");
-  useEffect(() => { setSubmitted({}); }, [data]);
+    );
   useEffect(() => { const timer = setInterval(reload, 15000); return () => clearInterval(timer); }, [q, page]);
-  const relationFor = u => submitted[u._id] || data?.items.find(item => item._id === u._id)?.mentorship || u.mentorship;
+  const relationFor = u => u.mentorship;
   const relationLabel = r => ({pending:"Request pending",accepted:"Mentorship accepted",rejected:"Request declined",completed:"Mentorship completed"}[r?.status]);
   return (
     <>
@@ -386,11 +284,6 @@ function Mentors() {
           }}
         />
       </div>
-      {sent && (
-        <div className="success" role="status">
-          {sent}
-        </div>
-      )}
       <Notice error={error} />
       {loading && !data ? (
         <Loading />
@@ -398,7 +291,7 @@ function Mentors() {
         <div className="cards-grid">
           {data?.items.map((u) => (
             <article className="card mentor-card" key={u._id}>
-              <span className={`status mentor-request-status ${relationFor(u)?.status || "available"}`}>{relationLabel(relationFor(u)) || "Open to mentorship"}</span>
+              <span className={`status mentor-request-status ${relationFor(u)?.status || "available"}`}>{relationLabel(relationFor(u)) || (u.contactPreference === "open" ? "Open messaging" : "Request first")}</span>
               <Avatar user={u} large />
               <h2>{u.name}</h2>
               <p>
@@ -417,9 +310,10 @@ function Mentors() {
                   <span key={s}>{s}</span>
                 ))}
               </div>
-              <button className="wide" onClick={() => setSelected(u)}>
+              <Link className="button wide" to={`/app/members/${u._id}`}>
                 View profile <ArrowUpRight size={16} />
-              </button>
+              </Link>
+              {u.contactPreference === "open" && !["accepted", "completed"].includes(relationFor(u)?.status) && <Action className="wide primary" run={async () => { const response = await api.post("/direct-conversations", { recipient: u._id }); navigate(`/app/messages/${response.data.item._id}`); }}>Message <MessagesSquare size={16}/></Action>}
             </article>
           ))}
         </div>
@@ -428,47 +322,6 @@ function Mentors() {
         <Empty>No mentors match your search.</Empty>
       )}
       <Pager {...{ data, page, setPage }} />
-      {selected && (
-        <Modal title={selected.name} onClose={() => setSelected(null)}>
-          <Link className="button primary" to={"/app/members/" + selected._id}>
-            View Alumni profile <ArrowUpRight size={15} />
-          </Link>
-          <p>{selected.bio}</p>
-          <p className="preserve">{selected.experience}</p>
-          {selected.linkedin && (
-            <a href={selected.linkedin} target="_blank" rel="noreferrer">
-              Professional profile <ArrowUpRight size={14} />
-            </a>
-          )}
-          {["student", "alumni"].includes(user.role) && relationFor(selected) ? (
-            <div className="note-card"><p>{relationLabel(relationFor(selected))}</p>
-              {relationFor(selected).status === "accepted" && <Link className="button primary" to={"/app/messages/" + relationFor(selected)._id}>Message mentor</Link>}
-            </div>
-          ) : ["student", "alumni"].includes(user.role) ? (
-            <Form
-              fields={[
-                { name: "title", label: "What would you like guidance on?" },
-                {
-                  name: "description",
-                  label: "Introduce yourself and your goals",
-                  area: true,
-                  max: 3000,
-                },
-              ]}
-              submit="Request mentorship"
-              onSubmit={async (v) => {
-                const result = await api.post("/mentorships", { ...v, mentor: selected._id });
-                setSubmitted(previous => ({ ...previous, [selected._id]: result.data.item }));
-                reload();
-                setSelected(null);
-                setSent("Your mentorship request has been sent.");
-              }}
-            />
-          ) : (
-            <p>Mentorship requests are available to Students and Alumni.</p>
-          )}
-        </Modal>
-      )}
     </>
   );
 }
@@ -477,34 +330,20 @@ function Requests() {
     [page, setPage] = useState(1),
     { data, error, loading, reload } = useLoad(`/mentorships?page=${page}`);
   return (
-    <>
-      <Head
-        title="Grow, together."
-        description="Your mentorship requests and connections, all in one place."
-      />
+    <section className="mentorship-workspace">
+      <header className="mentorship-heading"><div><span className="eyebrow">GUIDANCE & CONNECTIONS</span><h1>Mentorships</h1><p>{user.role === "alumni" ? "Guide your mentees and keep your mentoring connections close." : "Your mentors, requests and conversations in one place."}</p></div><Link className="button" to="/app/mentors"><Plus size={16}/>Find a mentor<ArrowUpRight size={15}/></Link></header>
       <Notice error={error} />
       {loading ? (
         <Loading />
       ) : data?.items.length ? (
         data.items.map((item) => {
           const other =
-            String(item.student?._id) === user._id ? item.mentor : item.student;
+            item.type === "direct" ? item.counterpart : String(item.student?._id) === user._id ? item.mentor : item.student;
           return (
-            <article className="card" key={item._id}>
-              <div className="row between">
-                <div className="row">
-                  <Avatar user={other} />
-                  <div>
-                    <h2>{item.title}</h2>
-                    <small>
-                      {other?.name} · {other?.department}
-                      <span> · You are the {String(item.mentor?._id) === user._id ? "mentor" : "mentee"}</span>
-                    </small>
-                  </div>
-                </div>
-                <Status value={item.status} />
-              </div>
-              <p className="preserve">{item.description}</p>
+            <article className="card mentorship-connection" key={item._id}>
+              <div className="mentorship-card-top"><Link className="mentorship-person" to={`/app/members/${other?._id}`}><Avatar user={other}/><div><strong>{other?.name || "Former member"}</strong><small>{[String(item.mentor?._id) === user._id ? "Your mentee" : "Your mentor",other?.department].filter(Boolean).join(" / ")}</small></div></Link><Status value={item.status}/></div>
+              <div className="mentorship-request-body"><span className="mentorship-topic-label"><HeartHandshake size={14}/>MENTORSHIP REQUEST</span><h2>{item.title}</h2>{item.description && <p className="preserve">{item.description}</p>}</div>
+              <div className="mentorship-card-footer"><span className="mentorship-date">{item.createdAt ? date(item.createdAt) : ""}</span>
               <div className="actions">
                 {item.closedForConversion && item.status === "completed" && (
                   <Link className="button" to={"/app/archives/" + item._id}>
@@ -516,6 +355,7 @@ function Requests() {
                   ["accepted", "rejected"].map((status) => (
                     <Action
                       key={status}
+                      className={status === "accepted" ? "primary" : ""}
                       run={async () => {
                         await api.patch(`/mentorships/${item._id}`, { status });
                         reload();
@@ -531,7 +371,7 @@ function Requests() {
                       className="button primary"
                       to={`/app/messages/${item._id}`}
                     >
-                      Open conversation
+                      <MessagesSquare size={16}/>Open conversation<ArrowUpRight size={15}/>
                     </Link>
                     {String(item.mentor?._id) === user._id && <Action
                       run={async () => {
@@ -545,7 +385,7 @@ function Requests() {
                     </Action>}
                   </>
                 )}
-              </div>
+              </div></div>
             </article>
           );
         })
@@ -555,16 +395,30 @@ function Requests() {
         </Empty>
       )}
       <Pager {...{ data, page, setPage }} />
-    </>
+    </section>
   );
+}
+function AdministratorContacts({ data, search, id, onOpened }) {
+  const navigate = useNavigate(), [busy, setBusy] = useState(""), [error, setError] = useState("");
+  const contacts = (data?.contacts || []).filter(contact => `${contact.name} ${contact.role}`.toLowerCase().includes(search.toLowerCase()));
+  return <><Notice error={error}/>{contacts.length ? contacts.map(contact => {
+    const conversation = data.items.find(item => item.counterpart?._id === contact._id);
+    return <button key={contact._id} className={`administrator-contact ${conversation?._id === id ? "active" : ""}`} disabled={!!busy} onClick={async () => {
+      setError(""); setBusy(contact._id);
+      try {
+        const conversationId = conversation?._id || (await api.post("/admin/conversations", { recipient: contact._id })).data.item._id;
+        navigate(`/app/messages/${conversationId}`); onOpened();
+      } catch (err) { setError(errorText(err)); } finally { setBusy(""); }
+    }}><Avatar user={contact}/><div><strong>{contact.name}</strong><small className="connection-role">{contact.role === "superadmin" ? "Super Admin" : "Administrator"}</small>{conversation?.lastMessage && <small className="last-message">{conversation.lastMessage.deletedAt ? "Message deleted" : conversation.lastMessage.body?.slice(0,70) || conversation.lastMessage.attachments?.[0]?.name || conversation.lastMessage.attachment?.name || "Attachment"}</small>}</div>{busy === contact._id && <small>Opening…</small>}</button>;
+  }) : <Empty>{search ? "No administrators match your search." : "No other active administrators."}</Empty>}</>;
 }
 function Messages() {
   const [search,setSearch] = useState("");
   const { user } = useAuth(),
     { id } = useParams(),
     { data, loading, error, reload } = useLoad("/conversations");
-  useEffect(() => { if (!["student", "alumni"].includes(user.role)) return; const timer = setInterval(reload, 15000); return () => clearInterval(timer); }, [user.role]);
-  if (!["student", "alumni"].includes(user.role))
+  useEffect(() => { if (!["student", "alumni", "admin", "superadmin"].includes(user.role)) return; const timer = setInterval(reload, 15000); return () => clearInterval(timer); }, [user.role]);
+  if (!["student", "alumni", "admin", "superadmin"].includes(user.role))
     return (
       <>
         <Head title="Messages" />
@@ -577,8 +431,8 @@ function Messages() {
   return (
     <>
       <Head
-        title="Meaningful conversations"
-        description="A space for you and your accepted mentorship connections."
+        title={admin(user) ? "Administrator messages" : "Meaningful conversations"}
+        description={admin(user) ? "Private communication between administrators." : "Your mentorship connections and open conversations."}
       />
       <Notice error={error} />
       {loading && !data ? (
@@ -586,9 +440,9 @@ function Messages() {
       ) : (
         <div className={`messaging premium-messaging ${id ? "has-conversation" : ""}`}>
           <aside className="contact-list">
-            <div className="inbox-heading"><span className="eyebrow">YOUR INNER CIRCLE</span><h3>Conversations <small>{data?.items.length || 0}</small></h3><input aria-label="Search conversations" placeholder="Find a connection…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
-            {data?.items.length ? (
-              data.items.filter(item => [item.student?.name,item.mentor?.name,item.title].join(" ").toLowerCase().includes(search.toLowerCase())).map((item) => {
+            <div className="inbox-heading"><span className="eyebrow">YOUR INNER CIRCLE</span><h3>{admin(user) ? "Administrators" : "Conversations"} <small>{admin(user) ? data?.contacts?.length || 0 : data?.items.length || 0}</small></h3><input aria-label="Search conversations" placeholder="Find a connection…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
+            {admin(user) ? <AdministratorContacts {...{data,search,id}} onOpened={reload}/> : data?.items.length ? (
+              data.items.filter(item => [item.counterpart?.name,item.student?.name,item.mentor?.name,item.title].join(" ").toLowerCase().includes(search.toLowerCase())).map((item) => {
                 const other =
                   String(item.student?._id) === user._id ? item.mentor : item.student;
                 return (
@@ -596,13 +450,13 @@ function Messages() {
                     <Avatar user={other} />
                     <div>
                       <strong>{other?.name}</strong>
-                      <small className="connection-role">{String(item.mentor?._id) === user._id ? "Your mentee" : "Your mentor"}{item.status === "completed" ? " · Completed" : ""}</small><small className="last-message">{item.lastMessage?.deletedAt ? "Message deleted" : item.lastMessage?.body?.slice(0,70) || item.title}</small>
+                      <small className="connection-role">{item.type === "direct" ? "Direct conversation" : String(item.mentor?._id) === user._id ? "Your mentee" : "Your mentor"}{item.status === "completed" ? " · Completed" : ""}</small><small className="last-message">{item.lastMessage?.deletedAt ? "Message deleted" : item.lastMessage?.body?.slice(0,70) || item.lastMessage?.attachments?.[0]?.name || item.lastMessage?.attachment?.name || item.title}</small>
                     </div>
                   </NavLink>
                 );
               })
             ) : (
-              <Empty>{"Accepted connections appear here. As a mentee, wait for your mentor’s first message; as a mentor, send the first message to open the conversation."}</Empty>
+              <Empty>{"Mentorship conversations and Alumni open chats appear here. Find a mentor or open an Alumni profile to connect."}</Empty>
             )}
           </aside>
           <section className="conversation">
@@ -618,28 +472,58 @@ function Messages() {
   );
 }
 function Conversation({ id }) {
-  const { user } = useAuth(), [page,setPage]=useState(1), [body,setBody]=useState(""), [sending,setSending]=useState(false), [actionError,setActionError]=useState(""), [deleting,setDeleting]=useState(null);
+  const { user } = useAuth(), [page,setPage]=useState(1), [body,setBody]=useState(""), [sending,setSending]=useState(false), [actionError,setActionError]=useState(""), [deleting,setDeleting]=useState(null), [attachments,setAttachments]=useState([]), [attachmentPreviews,setAttachmentPreviews]=useState([]), [uploadProgress,setUploadProgress]=useState(0);
   const {data,error,loading,reload}=useLoad(`/conversations/${id}/messages?page=${page}`);
   const history=useRef(null), follow=useRef(true);
   useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)reload();},10000);return()=>clearInterval(timer);},[id,page]);
   useEffect(()=>{if(page===1&&follow.current&&history.current)history.current.scrollTop=history.current.scrollHeight;},[data,page]);
-  const send=async()=>{if(!body.trim()||sending)return;setSending(true);setActionError("");try{await api.post(`/conversations/${id}/messages`,{body:body.trim()});setBody("");follow.current=true;setPage(1);reload();}catch(err){setActionError(errorText(err));}finally{setSending(false);}};
+  useEffect(() => {
+    const previews = attachments.map(file => file.type.startsWith("image/") ? URL.createObjectURL(file) : "");
+    setAttachmentPreviews(previews);
+    return () => previews.forEach(url => { if(url) URL.revokeObjectURL(url); });
+  }, [attachments]);
+  const chooseAttachment = event => {
+    const chosen = [...(event.target.files || [])]; event.target.value = "";
+    if (!chosen.length) return;
+    const next = [...attachments, ...chosen];
+    if (next.length > 5 || next.reduce((sum,file)=>sum+file.size,0)>25*1024*1024 || next.some(file=>!file.size || file.size>10*1024*1024 || !/\.(jpe?g|png|webp|pdf)$/i.test(file.name))) {
+      setActionError("Choose up to 5 JPG, PNG, WebP or PDF files: 10 MB each, 25 MB total."); return;
+    }
+    setActionError(""); setAttachments(next);
+  };
+  const send = async () => {
+    if ((!body.trim() && !attachments.length) || sending || !data?.canSend) return;
+    setSending(true); setActionError(""); setUploadProgress(0);
+    try {
+      if (attachments.length) {
+        const form = new FormData(); attachments.forEach(file => form.append("files",file)); form.append("body",body.trim());
+        await api.post(`/conversations/${id}/attachments`,form,{onUploadProgress:event=>setUploadProgress(event.total ? Math.round(event.loaded/event.total*100) : 0)});
+      } else await api.post(`/conversations/${id}/messages`,{body:body.trim()});
+      setBody(""); setAttachments([]); follow.current=true; setPage(1); reload();
+    } catch(err) { setActionError(errorText(err)); } finally { setSending(false); }
+  };
   return <div className="premium-conversation">
-    <header className="chat-header"><Link className="chat-back" to="/app/messages" aria-label="Back to conversations">←</Link><Avatar user={data?.counterpart}/><div><Link to={data?.counterpart?._id ? `/app/members/${data.counterpart._id}` : "/app/messages"}><strong>{data?.counterpart?.name || "Conversation"}</strong></Link><small>{data?.relationship?.isMentor ? "Your mentee" : "Your Alumni mentor"} · {data?.relationship?.status === "completed" ? "Completed · Read only" : "Mentorship connection"}</small></div><span className="chat-security"><ShieldCheck size={15}/> Private</span></header>
+    <header className="chat-header"><Link className="chat-back" to="/app/messages" aria-label="Back to conversations">←</Link><Avatar user={data?.counterpart}/><div><Link to={data?.counterpart?._id ? `/app/members/${data.counterpart._id}` : "/app/messages"}><strong>{data?.counterpart?.name || "Conversation"}</strong></Link><small>{data?.relationship?.type === "direct" ? (data.relationship.audience === "admins" ? data.counterpart?.role === "superadmin" ? "Super Admin" : "Administrator" : "Community member") : data?.relationship?.isMentor ? "Your mentee" : "Your Alumni mentor"} · {data?.relationship?.status === "completed" ? "Completed · Read only" : data?.relationship?.type === "direct" ? "Direct conversation" : "Mentorship connection"}</small></div><span className="chat-security"><ShieldCheck size={15}/> Private</span></header>
     <Notice error={error||actionError}/>
-    <div className="chat-topic"><HeartHandshake size={14}/><span>{data?.relationship?.title || "A little guidance. A meaningful connection."}</span></div>
+    {data?.relationship?.audience !== "admins" && <div className="chat-topic"><HeartHandshake size={14}/><span>{data?.relationship?.title || "A little guidance. A meaningful connection."}</span></div>}
     <div className="message-history premium-history" ref={history} onScroll={()=>{const el=history.current;if(el)follow.current=el.scrollHeight-el.scrollTop-el.clientHeight<100;}}>
       {loading&&!data ? <Loading/> : data?.items.length ? [...data.items].reverse().map((m,index,list)=>{
         const mine=String(m.sender?._id)===user._id;
         const day=new Date(m.createdAt).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
         const showDay=index===0||new Date(list[index-1].createdAt).toDateString()!==new Date(m.createdAt).toDateString();
-        return <React.Fragment key={m._id}>{showDay&&<div className="chat-day"><span>{day}</span></div>}<div className={`chat-message-row ${mine?"outgoing":"incoming"}`}><article className={`chat-bubble ${m.deletedAt?"deleted":""}`}><p>{m.deletedAt?"This message was deleted":m.body}</p><div className="chat-message-meta"><time dateTime={m.createdAt}>{new Date(m.createdAt).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})}</time>{mine&&!m.deletedAt&&<Check size={12}/>} {mine&&!m.deletedAt&&data.canSend&&<button className="delete-chat-message" type="button" aria-label="Delete your message" onClick={()=>setDeleting(m)}>Delete</button>}</div></article></div></React.Fragment>;
-      }) : !error&&<div className="chat-welcome"><MessagesSquare size={34}/><h3>A conversation worth starting.</h3><p>{data?.relationship?.isMentor?"Welcome your mentee and ask how you can help.":"Share your questions, goals and next steps with your mentor."}</p></div>}
+        return <React.Fragment key={m._id}>{showDay&&<div className="chat-day"><span>{day}</span></div>}<div className={`chat-message-row ${mine?"outgoing":"incoming"}`}><article className={`chat-bubble ${m.deletedAt?"deleted":""}`}>{!m.deletedAt && (m.attachment || m.attachments?.length) && <ChatAttachments message={m} onReady={() => {if(page === 1 && follow.current && history.current) history.current.scrollTop=history.current.scrollHeight;}}/>}<p>{m.deletedAt?"This message was deleted":m.body}</p><div className="chat-message-meta"><time dateTime={m.createdAt}>{new Date(m.createdAt).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})}</time>{mine&&!m.deletedAt&&<Check size={12}/>} {mine&&!m.deletedAt&&data.canSend&&<button className="delete-chat-message" type="button" aria-label="Delete your message" onClick={()=>setDeleting(m)}>Delete</button>}</div></article></div></React.Fragment>;
+      }) : !error&&data?.relationship?.audience !== "admins"&&<div className="chat-welcome"><MessagesSquare size={34}/><h3>A conversation worth starting.</h3><p>{data?.relationship?.type === "direct" ? "Introduce yourself and start a thoughtful conversation." : data?.relationship?.isMentor?"Welcome your mentee and ask how you can help.":"Share your questions, goals and next steps with your mentor."}</p></div>}
     </div>
     <Pager {...{data,page,setPage}}/>
     {!error&&data?.waitingForMentor&&<div className="chat-state-note"><Clock size={17}/>Your mentor will send the first message. You can reply after that.</div>}
-    {!error&&data?.relationship?.status==="completed"&&<div className="chat-state-note"><ShieldCheck size={17}/>Mentorship completed. Your conversation history is read only.</div>}
-    {!error&&data?.canSend&&<form className="premium-composer" onSubmit={e=>{e.preventDefault();send();}}><label className="sr-only" htmlFor="chat-message">Your message</label><textarea id="chat-message" value={body} disabled={sending} maxLength={4000} placeholder={data.relationship.isMentor?"Share a thought. Offer a little guidance…":"Ask a question. Share your next step…"} onChange={e=>setBody(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();send();}}} rows={2}/><div className="composer-footer"><small>Enter to send · Shift + Enter for a new line<span>{body.length}/4000</span></small><button className="primary" type="submit" disabled={sending||!body.trim()}><Send size={17}/>{sending?"Sending…":"Send"}</button></div></form>}
+    {!error&&data?.relationship?.status==="completed"&&<div className="chat-state-note"><ShieldCheck size={17}/>Messaging is closed. Your conversation history is read only.</div>}
+    {!error&&data?.canSend&&<form className="premium-composer" onSubmit={e=>{e.preventDefault();send();}}>
+      {attachments.length > 0 && <div className="chat-pending-files">{attachments.map((file,index)=><div className="chat-pending-file" key={`${file.name}-${index}`}>{attachmentPreviews[index] ? <img src={attachmentPreviews[index]} alt="Attachment preview"/> : <FileText size={22}/>}<div><strong>{file.name}</strong><small>{(file.size/1024/1024).toFixed(2)} MB</small></div><button type="button" disabled={sending} aria-label={`Remove ${file.name}`} onClick={()=>setAttachments(files=>files.filter((_,i)=>i!==index))}><X size={15}/></button></div>)}</div>}
+      <div className="chat-compose-row"><label className={`chat-attach-button ${sending ? "disabled" : ""}`} title="Attach image or PDF"><Paperclip size={20}/><span className="sr-only">Attach up to 5 images or PDFs, 10 MB each, 25 MB total</span><input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf" disabled={sending} onChange={chooseAttachment}/></label>
+      <label className="sr-only" htmlFor="chat-message">Your message</label><textarea id="chat-message" value={body} disabled={sending} maxLength={4000} placeholder="Write a message…" onChange={e=>setBody(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();send();}}} rows={2}/>
+      <button className="primary chat-send-button" type="submit" disabled={sending||(!body.trim()&&!attachments.length)} aria-label="Send message"><Send size={18}/><span>{sending ? attachments.length ? `${uploadProgress}%` : "Sending…" : "Send"}</span></button></div>
+      <div className="composer-footer"><small>Up to 5 files · 10 MB each · 25 MB total</small><small>{body.length}/4000</small></div>
+    </form>}
     {deleting&&<Modal title="Delete this message?" onClose={()=>setDeleting(null)}><p>The message content will be removed for both people. A deleted-message label will remain in the conversation.</p><div className="actions"><button onClick={()=>setDeleting(null)}>Keep message</button><Action run={async()=>{await api.delete(`/conversations/${id}/messages/${deleting._id}`);setDeleting(null);reload();}}>Delete message</Action></div></Modal>}
   </div>;
 }

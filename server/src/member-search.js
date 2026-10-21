@@ -32,7 +32,7 @@ export async function paginated(
   Model,
   filter,
   req,
-  { select, sort = { name: 1, _id: 1 } } = {},
+  { select, populate, sort = { name: 1, _id: 1 } } = {},
 ) {
   const page = Number(req.query.page) || 1,
     limit = 20;
@@ -41,6 +41,7 @@ export async function paginated(
     .skip((page - 1) * limit)
     .limit(limit);
   if (select) find = find.select(select);
+  if (populate) find = find.populate(populate);
   const [items, total] = await Promise.all([
     find.lean(),
     Model.countDocuments(filter),
@@ -73,7 +74,7 @@ export async function memberList(req) {
   return {
     ...(await paginated(User, filter, req, {
       select:
-        "name email universityId role status active department batch createdAt emailVerified suspensionUntil suspensionReason",
+        "name email universityId role status active avatar department batch createdAt emailVerified suspensionUntil suspensionReason",
     })),
     effectiveRole: chosen,
   };

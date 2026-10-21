@@ -71,7 +71,7 @@ export function recoveryRoutes(config) {
     token(),
     body("password")
       .isString()
-      .isLength({ min: 11, max: 72 })
+      .isLength({ min: 8, max: 72 })
       .custom((v) => Buffer.byteLength(v) <= 72),
     validate,
     async (req, res) => {

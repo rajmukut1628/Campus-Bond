@@ -1,3 +1,6 @@
+import { messageAttachmentRoutes } from "./message-attachments.js";
+import { directMessagingRoutes, directConversationItems, directProfileState } from "./direct-messaging.js";
+import { resourceListVisibility } from "./resources.js";
 import { mentorHasStarted, relationshipSummary } from "./mentorship-access.js";
 import { feedRoutes } from "./feed.js";
 import { published, resourceRoutes } from "./resources.js";
@@ -16,6 +19,7 @@ import {
   VerifiedUser,
   Mentorship,
   Message,
+  MessageAttachment,
   Post,
   Job,
   Event,
@@ -50,9 +54,9 @@ const str = (field, max, min = 1) =>
 const password = () =>
   body("password")
     .isString()
-    .isLength({ min: 11, max: 72 })
+    .isLength({ min: 8, max: 72 })
     .custom((value) => Buffer.byteLength(value, "utf8") <= 72)
-    .withMessage("Use at least 11 characters and at most 72 UTF-8 bytes");
+    .withMessage("Use at least 8 characters and at most 72 UTF-8 bytes");
 const fields = (data, names) =>
   Object.fromEntries(
     names.filter((k) => data[k] !== undefined).map((k) => [k, data[k]]),
@@ -138,11 +142,7 @@ export function routes(config) {
       [
         Mentorship.countDocuments({ ...member, status: "accepted" }),
         Job.countDocuments({ ...published, status: "open", closesAt: { $gt: new Date() } }),
-        Event.countDocuments({
-          ...published,
-          status: "published",
-          startsAt: { $gt: new Date() },
-        }),
+        Event.countDocuments(resourceListVisibility(req.user)),
         Post.countDocuments(published),
         Notification.countDocuments({ user: req.user._id, read: false }),
       ],
@@ -161,7 +161,7 @@ export function routes(config) {
   r.use(profileRoutes());
   r.use(studentConversionRoutes());
   r.get("/mentors", async (req, res) => {
-    const filter = { role: "alumni", active: true, mentoring: true, _id: { $ne: req.user._id } };
+    const filter = { role: "alumni", active: true, $and: [{ $or: [{ mentoring: true }, { contactPreference: "open" }] }], _id: { $ne: req.user._id } };
     if (req.query.q)
       filter.$or = ["name", "company", "department"].map((k) => ({
         [k]: {
@@ -172,21 +172,21 @@ export function routes(config) {
         },
       }));
     const data = await list(User, filter, req);
-    const relations = ["student", "alumni"].includes(req.user.role) ? await Mentorship.find({ student: req.user._id, mentor: { $in: data.items.map(u => u._id) } }) : [];
+    const relations = ["student", "alumni"].includes(req.user.role) ? await Mentorship.find({ $or: [{ student: req.user._id, mentor: { $in: data.items.map(u => u._id) } }, { mentor: req.user._id, student: { $in: data.items.map(u => u._id) } }] }) : [];
     data.items = await Promise.all(data.items.map(async u => ({
       ...fields(u.toObject(), ["_id", ...publicFields.split(" ")]),
-      mentorship: await relationshipSummary(relations.find(r => String(r.mentor) === String(u._id)))
+      mentorship: await relationshipSummary(relations.find(r => String(r.mentor) === String(u._id) || String(r.student) === String(u._id)))
     })));
     res.json(data);
   });
   r.get("/users/:id", ...id(), async (req, res) => {
     const user = await User.findOne({
       _id: req.params.id,
-      active: true,
+      ...(isAdmin(req.user) ? { status: { $ne: "deleted" } } : { active: true }),
     }).select(publicFields);
     assert(user, 404, "User not found");
-    const relation = ["student", "alumni"].includes(req.user.role) && user.role === "alumni" ? await Mentorship.findOne({ student: req.user._id, mentor: user._id }) : null;
-    res.json({ user, mentorship: await relationshipSummary(relation) });
+    const relation = ["student", "alumni"].includes(req.user.role) && user.role === "alumni" ? await Mentorship.findOne({ $or: [{ student: req.user._id, mentor: user._id }, { mentor: req.user._id, student: user._id }] }) : null;
+    res.json({ user, mentorship: await relationshipSummary(relation), directMessaging: await directProfileState(req.user, user) });
   });
   r.get("/mentorships", async (req, res) =>
     res.json(
@@ -218,6 +218,7 @@ export function routes(config) {
           role: "alumni",
           active: true,
           mentoring: true,
+          contactPreference: { $ne: "open" },
         }),
         404,
         "Available mentor not found",
@@ -282,7 +283,16 @@ export function routes(config) {
       res.json({ item: record });
     },
   );
-  r.get("/conversations", roles("student", "alumni"), async (req, res) => {
+  r.use(messageAttachmentRoutes());
+  r.use(directMessagingRoutes());
+  r.get("/conversations", roles("student", "alumni", "admin", "superadmin"), async (req, res) => {
+    if (isAdmin(req.user)) {
+      const [items, contacts] = await Promise.all([
+        directConversationItems(req.user),
+        User.find({ _id: { $ne: req.user._id }, role: { $in: ["admin", "superadmin"] }, active: true, status: "active" }).select("name role avatar").sort({ name: 1, _id: 1 }).lean(),
+      ]);
+      return res.json({ items, contacts });
+    }
     const items = await Mentorship.find({
       status: { $in: ["accepted", "completed"] },
       closedForConversion: { $ne: true },
@@ -303,8 +313,8 @@ export function routes(config) {
       const started = !!item.mentorStartedAt || startedIds.has(String(item._id));
       if (String(item.mentor._id) === String(req.user._id) || started) visible.push({ ...item.toObject(), mentorStarted: started, canSend: item.status === "accepted" && (String(item.mentor._id) === String(req.user._id) || started) });
     }
-    const latest = visible.length ? await Message.aggregate([{ $match: { mentorship: { $in: visible.map(x => x._id) } } }, { $sort: { createdAt: -1, _id: -1 } }, { $group: { _id: "$mentorship", body: { $first: "$body" }, deletedAt: { $first: "$deletedAt" }, sentAt: { $first: "$createdAt" } } }]) : [];
-    res.json({ items: visible.map(item => ({...item,lastMessage:latest.find(m=>String(m._id)===String(item._id))})) });
+    const latest = visible.length ? await Message.aggregate([{ $match: { mentorship: { $in: visible.map(x => x._id) } } }, { $sort: { createdAt: -1, _id: -1 } }, { $group: { _id: "$mentorship", body: { $first: "$body" }, deletedAt: { $first: "$deletedAt" }, attachment: { $first: "$attachment" }, attachments: { $first: "$attachments" }, sentAt: { $first: "$createdAt" } } }]) : [];
+    res.json({ items: [...visible.map(item => ({...item,lastMessage:latest.find(m=>String(m._id)===String(item._id))})), ...await directConversationItems(req.user)].sort((a,b) => new Date(b.lastMessage?.sentAt || b.updatedAt) - new Date(a.lastMessage?.sentAt || a.updatedAt)) });
   });
   r.get(
     "/conversations/:id/messages",
@@ -366,8 +376,9 @@ export function routes(config) {
       const relation=await acceptedRelationship(req.user,req.params.id,s);
       const write=await Mentorship.updateOne({_id:relation._id,status:"accepted"},{$inc:{accessVersion:1}},{session:s});
       assert(write.matchedCount===1,409,"Mentorship status changed. Refresh the conversation.");
-      const message=await Message.findOneAndUpdate({_id:req.params.messageId,mentorship:relation._id,sender:req.user._id,deletedAt:{$exists:false}},{$set:{body:"[Message deleted]",deletedAt:new Date()}},{new:true,session:s});
+      const message=await Message.findOneAndUpdate({_id:req.params.messageId,mentorship:relation._id,sender:req.user._id,deletedAt:{$exists:false}},{$set:{body:"[Message deleted]",deletedAt:new Date()},$unset:{attachment:1,attachments:1}},{new:true,session:s});
       assert(message,403,"Only your own undeleted messages can be removed");
+      await MessageAttachment.deleteMany({message:message._id},{session:s});
     });
     res.json({message:"Message deleted"});
   });

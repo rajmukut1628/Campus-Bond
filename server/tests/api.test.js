@@ -373,7 +373,7 @@ describe("Roles, ownership, and community resources", () => {
           agents.admin,
           "patch",
           `/admin/users/${users.superadmin._id}`,
-          { active: false },
+          { status: "suspended" },
         )
       ).status,
     ).toBe(403);
@@ -395,11 +395,11 @@ describe("Roles, ownership, and community resources", () => {
       403,
     );
   });
-  it("allows moderators to deactivate members and blocks subsequent sessions", async () => {
+  it("allows moderators to suspend members and blocks subsequent sessions", async () => {
     expect(
       (
         await call(agents.admin, "patch", `/admin/users/${users.student._id}`, {
-          active: false,
+          status: "suspended",
         })
       ).status,
     ).toBe(200);
@@ -578,7 +578,7 @@ describe("Roles, ownership, and community resources", () => {
   });
 });
 
-it("accepts 11-character passwords and rejects 10-character passwords across provisioning and password changes", async () => {
+it("accepts 8-character passwords and rejects 7-character passwords across provisioning and password changes", async () => {
   const data = {
     name: "Length Student",
     email: "length@university.test",
@@ -590,7 +590,7 @@ it("accepts 11-character passwords and rejects 10-character passwords across pro
     (
       await call(agents.admin, "post", "/admin/users", {
         ...data,
-        password: "1234567890",
+        password: "1234567",
       })
     ).status,
   ).toBe(422);
@@ -598,7 +598,7 @@ it("accepts 11-character passwords and rejects 10-character passwords across pro
     (
       await call(agents.admin, "post", "/admin/users", {
         ...data,
-        password: "12345678901",
+        password: "12345678",
       })
     ).status,
   ).toBe(201);
@@ -606,21 +606,21 @@ it("accepts 11-character passwords and rejects 10-character passwords across pro
   const c = await client();
   await call(c, "post", "/auth/login", {
     identifier: data.email,
-    password: "12345678901",
+    password: "12345678",
   });
   expect(
     (
       await call(c, "put", "/auth/password", {
-        currentPassword: "12345678901",
-        password: "abcdefghij",
+        currentPassword: "12345678",
+        password: "abcdefg",
       })
     ).status,
   ).toBe(422);
   expect(
     (
       await call(c, "put", "/auth/password", {
-        currentPassword: "12345678901",
-        password: "abcdefghijk",
+        currentPassword: "12345678",
+        password: "abcdefgh",
       })
     ).status,
   ).toBe(200);
@@ -633,7 +633,7 @@ it("accepts 11-character passwords and rejects 10-character passwords across pro
     (
       await call(agents.superadmin, "post", "/superadmin/admins", {
         ...admin,
-        password: "1234567890",
+        password: "1234567",
       })
     ).status,
   ).toBe(422);
@@ -641,7 +641,7 @@ it("accepts 11-character passwords and rejects 10-character passwords across pro
     (
       await call(agents.superadmin, "post", "/superadmin/admins", {
         ...admin,
-        password: "12345678901",
+        password: "12345678",
       })
     ).status,
   ).toBe(201);
@@ -751,9 +751,9 @@ describe("Complete account management", () => {
       ).status,
     ).toBe(403);
   });
-  it("suspends, blocks and reactivates linked members through verified account controls", async () => {
+  it("suspends and reactivates linked members through verified account controls", async () => {
     const record = await verified(users.student);
-    for (const status of ["suspended", "blocked", "active"]) {
+    for (const status of ["suspended", "active"]) {
       expect(
         (
           await call(
@@ -823,7 +823,7 @@ describe("Complete account management", () => {
     const record = await verified(users.student);
     await Post.create({ author: users.student._id, body: "Retained story" });
     expect(
-      (await call(agents.admin, "delete", `/admin/users/${users.student._id}`))
+      (await call(agents.superadmin, "delete", `/admin/users/${users.student._id}`))
         .status,
     ).toBe(200);
     expect((await User.findById(users.student._id)).status).toBe("deleted");
@@ -859,7 +859,7 @@ describe("Complete account management", () => {
     expect(
       (
         await call(
-          agents.admin,
+          agents.superadmin,
           "delete",
           `/admin/verified-users/${record._id}`,
         )
@@ -876,10 +876,10 @@ describe("Complete account management", () => {
     expect(
       (
         await call(
-          agents.admin,
+          agents.superadmin,
           "patch",
           `/admin/verified-users/${pending._id}`,
-          { status: "blocked" },
+          { status: "suspended" },
         )
       ).status,
     ).toBe(200);
@@ -895,7 +895,7 @@ describe("Complete account management", () => {
     expect(
       (
         await call(
-          agents.admin,
+          agents.superadmin,
           "delete",
           `/admin/verified-users/${pending._id}`,
         )
@@ -904,7 +904,7 @@ describe("Complete account management", () => {
     expect(
       (
         await call(
-          agents.admin,
+          agents.superadmin,
           "delete",
           `/admin/verified-users/${pending._id}`,
         )
@@ -1647,6 +1647,10 @@ describe("Student to Alumni conversion with history retention", () => {
         })
       ).status,
     ).toBe(200);
+    const history = await call(agents.student, "get", "/conversions");
+    expect(history.body.items[0].reviewedBy.name).toBe(users.admin.name);
+    const reviewed = await call(agents.admin, "get", "/admin/conversions?status=rejected");
+    expect(reviewed.body.items[0].reviewedBy.role).toBe("admin");
     expect((await User.findById(users.student._id)).role).toBe("student");
     expect((await apply()).status).toBe(201);
     expect((await call(agents.student, "get", "/conversions")).body.total).toBe(
@@ -2397,8 +2401,8 @@ describe("Premium unified Newsfeed", () => {
     const a = (await call(agents.student, "get", "/feed?mode=latest&page=1"))
         .body,
       b = (await call(agents.student, "get", "/feed?mode=latest&page=2")).body;
-    expect(a.items).toHaveLength(12);
-    expect(b.items).toHaveLength(12);
+    expect(a.items).toHaveLength(20);
+    expect(b.items).toHaveLength(9);
     expect(
       a.items.filter((x) => b.items.some((y) => y._id === x._id)),
     ).toHaveLength(0);
@@ -2581,7 +2585,7 @@ describe("Cover pictures, resource metadata and participant management", () => {
         (await call(agents.student, "get", `/${kind}/${id}/cover`)).status,
       ).toBe(404);
       expect(
-        (await call(agents.admin, "delete", `/${kind}/${id}/cover`)).status,
+        (await call(agents.superadmin, "delete", `/${kind}/${id}/cover`)).status,
       ).toBe(200);
     }
     expect(await CoverAsset.countDocuments()).toBe(0);
@@ -2789,8 +2793,8 @@ it("keeps For you pagination stable while visible cards become viewed during the
       "/feed?page=2&cutoff=" + encodeURIComponent(cutoff),
     )
   ).body;
-  expect(a.items).toHaveLength(12);
-  expect(b.items).toHaveLength(12);
+  expect(a.items).toHaveLength(20);
+  expect(b.items).toHaveLength(10);
   expect(b.total).toBe(30);
   expect(a.items.some((x) => b.items.some((y) => y._id === x._id))).toBe(false);
   expect(
@@ -3009,7 +3013,7 @@ describe("Timed account suspension", () => {
     await call(agents.admin, "patch", `/admin/users/${users.student._id}`, {status:"suspended",suspensionDays:1});
     await call(agents.admin, "patch", `/admin/users/${users.student._id}`, {status:"active"});
     expect((await User.findById(users.student._id)).suspensionUntil).toBeUndefined();
-    await call(agents.admin, "patch", `/admin/users/${users.student._id}`, {status:"blocked"});
+    await User.updateOne({_id:users.student._id},{$set:{status:"blocked",active:false}});
     await User.updateOne({_id:users.student._id},{$set:{suspensionUntil:new Date(0)}});
     await expireSuspensions();
     expect((await User.findById(users.student._id)).status).toBe("blocked");
@@ -3272,4 +3276,341 @@ describe("Private message deletion",()=>{
     await call(agents.alumni,"patch",`/mentorships/${id}`,{status:"completed"});
     expect((await call(agents.student,"delete",endpoint+next.body.item._id)).status).toBe(403);
   });
+});
+
+
+it("restricts resource edits to owners and Super Admin while retaining Admin moderation", async () => {
+  for (const [kind, body] of [["jobs", jobBody()], ["events", eventBody()], ["donations", campaignBody]]) {
+    const created = await call(agents.alumni, "post", `/${kind}`, body);
+    expect(created.status).toBe(201);
+    const id = created.body.item._id;
+    expect((await call(agents.admin, "put", `/${kind}/${id}`, body)).status).toBe(403);
+    expect((await call(agents.alumni, "put", `/${kind}/${id}`, body)).status).toBe(200);
+    expect((await call(agents.superadmin, "put", `/${kind}/${id}`, body)).status).toBe(200);
+    expect((await call(agents.admin, "delete", `/${kind}/${id}/cover`)).status).toBe(403);
+    expect((await call(agents.admin, "patch", `/${kind}/${id}/visibility`, { visibility: "archived" })).status).toBe(200);
+  }
+});
+
+it("shows total visible events on the dashboard and filters upcoming and own events", async () => {
+  await Event.create({ ...eventBody(), owner: users.alumni._id });
+  await Event.create({ ...eventBody(), owner: users.alumni._id, visibility: "hidden" });
+  await Event.create({ ...eventBody(), owner: users.alumni._id, startsAt: new Date(Date.now()-86400000) });
+  const upcoming = await call(agents.admin, "get", "/events?period=upcoming");
+  expect(upcoming.body.total).toBe(1);
+  const all = await call(agents.admin, "get", "/events");
+  expect(all.body.total).toBe(3);
+  expect((await call(agents.admin, "get", "/dashboard")).body.stats.events).toBe(all.body.total);
+  const own = await call(agents.alumni, "get", "/events?mine=true");
+  expect(own.body.total).toBe(3);
+  expect(own.body.myTotal).toBe(3);
+  expect((await call(agents.admin, "get", "/events?mine=true")).body.total).toBe(0);
+  const memberEvents = await call(agents.student, "get", "/events");
+  expect(memberEvents.body.total).toBe(2);
+  expect((await call(agents.student, "get", "/dashboard")).body.stats.events).toBe(memberEvents.body.total);
+  const past = await call(agents.admin, "get", "/events?period=past");
+  expect(past.body.total).toBe(1);
+});
+
+
+it("keeps batched feed cards consistent with detail statistics and authors", async () => {
+  const job = await Job.create({ ...jobBody(), owner: users.alumni._id });
+  await FeedInteraction.create({ kind: "jobs", record: job._id, user: users.student._id, reaction: "love", viewedAt: new Date() });
+  await FeedComment.create({ kind: "jobs", record: job._id, author: users.student._id, body: "Thanks for sharing" });
+  const list = await call(agents.student, "get", "/feed?mode=latest");
+  expect(list.status).toBe(200);
+  const item = list.body.items.find(item => item._id === String(job._id));
+  const detail = await call(agents.student, "get", `/feed/jobs/${job._id}`);
+  expect(item.stats).toEqual(detail.body.item.stats);
+  expect(item.author.name).toBe(users.alumni.name);
+  expect(item.body).toBe(job.description);
+  expect(item.registrations).toBeUndefined();
+});
+
+
+describe("Alumni contact preferences and direct messaging", () => {
+  const open = async () => {
+    const response = await call(agents.alumni, "patch", "/users/me", { contactPreference: "open" });
+    expect(response.status).toBe(200);
+    return call(agents.student, "post", "/direct-conversations", { recipient: String(users.alumni._id) });
+  };
+  it("defaults to request-first, validates preferences and restricts preference ownership", async () => {
+    expect((await User.findById(users.alumni._id)).contactPreference).toBe("request-first");
+    expect((await call(agents.student,"post","/direct-conversations",{recipient:String(users.alumni._id)})).status).toBe(403);
+    expect((await call(agents.alumni,"patch","/users/me",{contactPreference:"invalid"})).status).toBe(422);
+    await call(agents.student,"patch","/users/me",{contactPreference:"open"});
+    expect((await User.findById(users.student._id)).contactPreference).toBe("request-first");
+  });
+  it("allows the first message, replies and deletion without creating a mentorship", async () => {
+    const response = await open(); expect(response.status).toBe(200);
+    const id = response.body.item._id;
+    expect((await call(agents.student,"post","/direct-conversations",{recipient:String(users.alumni._id)})).body.item._id).toBe(id);
+    expect(await Mentorship.countDocuments()).toBe(0);
+    const sent = await call(agents.student,"post",`/conversations/${id}/messages`,{body:"Hello, may I ask about careers?"});
+    expect(sent.status).toBe(201);
+    expect((await call(agents.alumni,"post",`/conversations/${id}/messages`,{body:"Of course. How can I help?"})).status).toBe(201);
+    const history = await call(agents.alumni,"get",`/conversations/${id}/messages`);
+    expect(history.body.relationship.type).toBe("direct"); expect(history.body.canSend).toBe(true); expect(history.body.total).toBe(2);
+    const inbox = await call(agents.alumni,"get","/conversations");
+    expect(inbox.body.items[0].type).toBe("direct"); expect(inbox.body.items[0].counterpart._id).toBe(String(users.student._id));
+    expect((await call(agents.other,"get",`/conversations/${id}/messages`)).status).toBe(403);
+    expect((await call(agents.other,"post",`/conversations/${id}/messages`,{body:"Intrusion"})).status).toBe(403);
+    expect((await call(agents.alumni,"delete",`/conversations/${id}/messages/${sent.body.item._id}`)).status).toBe(403);
+    expect((await call(agents.student,"delete",`/conversations/${id}/messages/${sent.body.item._id}`)).status).toBe(200);
+    await call(agents.alumni,"patch","/users/me",{contactPreference:"request-first"});
+    expect((await call(agents.student,"post",`/conversations/${id}/messages`,{body:"Existing chat stays open"})).status).toBe(201);
+    expect((await call(agents.other,"post","/direct-conversations",{recipient:String(users.alumni._id)})).status).toBe(403);
+  });
+  it("normalizes IDs, preserves preferences in profile responses and blocks inactive participants", async () => {
+    const first=await open(), id=first.body.item._id;
+    const repeated=await call(agents.student,"post","/direct-conversations",{recipient:String(users.alumni._id).toUpperCase()});
+    expect(repeated.body.item._id).toBe(id);
+    const profile=await call(agents.student,"get",`/users/${users.alumni._id}`);
+    expect(profile.body.directMessaging.conversationId).toBe(id);
+    expect(profile.body.directMessaging.canStart).toBe(true);
+    await User.updateOne({_id:users.alumni._id},{$set:{active:false,status:"blocked"}});
+    expect((await call(agents.student,"post",`/conversations/${id}/messages`,{body:"Blocked recipient"})).status).toBe(403);
+    expect((await call(agents.student,"get","/conversations")).body.items).toHaveLength(0);
+  });
+  it("supports Alumni peers, exposes preferences and blocks self/admin access", async () => {
+    await open();
+    expect((await call(agents.unrelated,"post","/direct-conversations",{recipient:String(users.alumni._id)})).status).toBe(200);
+    expect((await call(agents.alumni,"post","/direct-conversations",{recipient:String(users.alumni._id)})).status).toBe(422);
+    expect((await call(agents.admin,"post","/direct-conversations",{recipient:String(users.alumni._id)})).status).toBe(403);
+    const profile=await call(agents.student,"get",`/users/${users.alumni._id}`);
+    expect(profile.body.user.contactPreference).toBe("open");
+    expect((await call(agents.student,"get","/mentors")).body.items.find(u=>u._id===String(users.alumni._id)).contactPreference).toBe("open");
+  });
+  it("prevents direct messaging from bypassing completion and preserves read-only history", async () => {
+    const response = await open(), id=response.body.item._id;
+    await call(agents.student,"post",`/conversations/${id}/messages`,{body:"Before mentorship completion"});
+    await Mentorship.create({student:users.student._id,mentor:users.alumni._id,title:"Career support",description:"Guidance request",status:"completed"});
+    expect((await call(agents.student,"post",`/conversations/${id}/messages`,{body:"Must not send"})).status).toBe(403);
+    expect((await call(agents.student,"post","/direct-conversations",{recipient:String(users.alumni._id)})).status).toBe(403);
+    const history=await call(agents.student,"get",`/conversations/${id}/messages`);
+    expect(history.status).toBe(200);expect(history.body.canSend).toBe(false);expect(history.body.items).toHaveLength(1);
+  });
+  it("keeps first-message restrictions on existing accepted mentorships", async () => {
+    await User.updateOne({_id:users.alumni._id},{$set:{contactPreference:"open"}});
+    const relation=await Mentorship.create({student:users.student._id,mentor:users.alumni._id,title:"Accepted guidance",description:"Existing mentorship",status:"accepted"});
+    const response=await call(agents.student,"post","/direct-conversations",{recipient:String(users.alumni._id)});
+    expect(response.body.item._id).toBe(String(relation._id));
+    expect(await models.DirectConversation.countDocuments()).toBe(0);
+    expect((await call(agents.student,"post",`/conversations/${relation._id}/messages`,{body:"Too early"})).status).toBe(403);
+  });
+});
+
+
+describe("Private administrator messaging", () => {
+  const start = () => call(agents.admin,"post","/admin/conversations",{recipient:String(users.superadmin._id)});
+  it("lists all active administrators except self and opens an empty chat", async () => {
+    const second=await User.create({name:"Second Administrator",email:"secondadmin@university.test",universityId:"SECONDADMIN",password:await bcrypt.hash(pass,4),role:"admin"});
+    const inbox=await call(agents.admin,"get","/conversations");
+    expect(inbox.status).toBe(200);
+    expect(inbox.body.contacts.map(contact=>contact._id).sort()).toEqual([String(second._id),String(users.superadmin._id)].sort());
+    expect(inbox.body.contacts.every(contact=>!contact.password&&!contact.email)).toBe(true);
+    const created=await start();expect(created.status).toBe(200);const id=created.body.item._id;
+    const reverse=await call(agents.superadmin,"post","/admin/conversations",{recipient:String(users.admin._id)});
+    expect(reverse.body.item._id).toBe(id);
+    const history=await call(agents.admin,"get",`/conversations/${id}/messages`);
+    expect(history.status).toBe(200);expect(history.body.items).toEqual([]);expect(history.body.canSend).toBe(true);
+    expect(history.body.relationship.audience).toBe("admins");
+    expect(await models.DirectMessage.countDocuments()).toBe(0);
+    expect(await Mentorship.countDocuments()).toBe(0);
+    expect((await call(agents.admin,"post","/admin/conversations",{recipient:String(second._id)})).status).toBe(200);
+  });
+  it("allows first messages, replies, notifications and own-message deletion", async () => {
+    const id=(await start()).body.item._id;
+    const sent=await call(agents.admin,"post",`/conversations/${id}/messages`,{body:"Please review the pending conversions."});
+    expect(sent.status).toBe(201);
+    expect((await call(agents.superadmin,"post",`/conversations/${id}/messages`,{body:"I will review them today."})).status).toBe(201);
+    const notification=await Notification.findOne({user:users.superadmin._id,category:"messages"});
+    expect(notification.link).toBe(`/app/messages/${id}`);
+    expect((await call(agents.superadmin,"delete",`/conversations/${id}/messages/${sent.body.item._id}`)).status).toBe(403);
+    expect((await call(agents.admin,"delete",`/conversations/${id}/messages/${sent.body.item._id}`)).status).toBe(200);
+    const history=await call(agents.superadmin,"get",`/conversations/${id}/messages`);
+    expect(history.body.items.some(item=>item.deletedAt)).toBe(true);
+    expect((await call(agents.superadmin,"get","/conversations")).body.items[0].counterpart._id).toBe(String(users.admin._id));
+  });
+  it("rejects mixed-role, unrelated, self and suspended access", async () => {
+    const id=(await start()).body.item._id;
+    for(const role of ["student","alumni"]) {
+      expect((await call(agents[role],"post","/admin/conversations",{recipient:String(users.admin._id)})).status).toBe(403);
+      expect((await call(agents[role],"get",`/conversations/${id}/messages`)).status).toBe(403);
+      expect((await call(agents[role],"post",`/conversations/${id}/messages`,{body:"Not allowed"})).status).toBe(403);
+      expect((await call(agents.admin,"post","/admin/conversations",{recipient:String(users[role]._id)})).status).toBe(403);
+    }
+    expect((await call(agents.admin,"post","/admin/conversations",{recipient:String(users.admin._id)})).status).toBe(422);
+    await User.updateOne({_id:users.superadmin._id},{$set:{active:false,status:"suspended"}});
+    expect((await call(agents.admin,"post",`/conversations/${id}/messages`,{body:"Suspended recipient"})).status).toBe(403);
+    const inbox=await call(agents.admin,"get","/conversations");expect(inbox.body.contacts).toEqual([]);expect(inbox.body.items).toEqual([]);
+  });
+  it("rechecks account groups after a role change", async () => {
+    const id=(await start()).body.item._id;
+    await User.updateOne({_id:users.admin._id},{$set:{role:"alumni"}});
+    expect((await call(agents.admin,"get",`/conversations/${id}/messages`)).status).toBe(403);
+    expect((await call(agents.superadmin,"post",`/conversations/${id}/messages`,{body:"No longer an administrator"})).status).toBe(403);
+    expect((await call(agents.superadmin,"get","/conversations")).body.contacts).toEqual([]);
+  });
+});
+
+
+describe("Private message attachments", () => {
+  const upload = (actor,id,buffer,name,type,body="") => agents[actor].agent.post(`/api/v1/conversations/${id}/attachments`).set("Origin",config.origin).set("X-CSRF-Token",agents[actor].token).field("body",body).attach("file",buffer,{filename:name,contentType:type});
+  const accepted = () => Mentorship.create({student:users.student._id,mentor:users.alumni._id,title:"File guidance",description:"Portfolio review",status:"accepted"});
+  const image = () => sharp({create:{width:12,height:8,channels:3,background:"#20a080"}}).png().toBuffer();
+  it("preserves an original image with a separate preview as the mentor first message, protects access and removes it on deletion", async () => {
+    const relation=await accepted(), id=relation._id;
+    const denied=await upload("student",id,await image(),"sample.png","image/png");expect(denied.status).toBe(403);
+    expect(await models.MessageAttachment.countDocuments()).toBe(0);
+    const original=await image();
+    const sent=await upload("alumni",id,original,"portfolio.png","image/png","Please review this image");
+    expect(sent.status).toBe(201);expect(sent.body.item.attachment.mimeType).toBe("image/png");
+    expect((await Mentorship.findById(id)).mentorStartedAt).toBeTruthy();
+    const file=`/message-attachments/${sent.body.item.attachment.id}`;
+    const viewed=await call(agents.student,"get",file);expect(viewed.status).toBe(200);expect(viewed.headers["content-type"]).toContain("image/png");
+    expect(viewed.body.equals(original)).toBe(true);
+    const preview=await call(agents.student,"get",file+"?preview=true");expect(preview.headers["content-type"]).toContain("image/webp");
+    expect((await call(agents.other,"get",file)).status).toBe(403);
+    expect((await call(agents.admin,"get",file)).status).toBe(403);
+    expect((await call(agents.student,"post",`/conversations/${id}/messages`,{body:"Thanks"})).status).toBe(201);
+    expect((await call(agents.alumni,"delete",`/conversations/${id}/messages/${sent.body.item._id}`)).status).toBe(200);
+    expect((await call(agents.student,"get",file)).status).toBe(404);
+    expect(await models.MessageAttachment.countDocuments()).toBe(0);
+  });
+  it("allows attachment-only PDFs in administrator conversations and supports downloads", async () => {
+    const id=(await call(agents.admin,"post","/admin/conversations",{recipient:String(users.superadmin._id)})).body.item._id;
+    const sent=await upload("admin",id,Buffer.from("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n%%EOF"),"report.pdf","application/pdf");
+    expect(sent.status).toBe(201);expect(sent.body.item.body).toBe("");
+    const file=`/message-attachments/${sent.body.item.attachment.id}`;
+    const download=await call(agents.superadmin,"get",file+"?download=true");
+    expect(download.status).toBe(200);expect(download.headers["content-disposition"]).toContain("attachment;");expect(download.headers["cache-control"]).toBe("private, no-store");
+    expect((await call(agents.student,"get",file)).status).toBe(403);
+    const history=await call(agents.superadmin,"get",`/conversations/${id}/messages`);expect(history.body.items[0].attachment.name).toBe("report.pdf");
+    expect((await call(agents.admin,"delete",`/conversations/${id}/messages/${sent.body.item._id}`)).status).toBe(200);
+    expect((await call(agents.superadmin,"get",file)).status).toBe(404);
+  });
+  it("sends multiple original files atomically and removes every attachment on deletion", async () => {
+    const id=(await accepted())._id, png=await image(), pdf=Buffer.from("%PDF-1.4\n%%EOF");
+    const sent=await agents.alumni.agent.post(`/api/v1/conversations/${id}/attachments`).set("Origin",config.origin).set("X-CSRF-Token",agents.alumni.token).field("body","Files").attach("files",png,{filename:"photo.png",contentType:"image/png"}).attach("files",pdf,{filename:"notes.pdf",contentType:"application/pdf"});
+    expect(sent.status).toBe(201);expect(sent.body.item.attachments).toHaveLength(2);
+    for (const [index,original] of [png,pdf].entries()) {
+      const url=`/message-attachments/${sent.body.item.attachments[index].id}?download=true`;
+      const result=await call(agents.student,"get",url);expect(result.status).toBe(200);expect(result.body.equals(original)).toBe(true);
+      expect(result.headers["content-disposition"]).toContain(index===0?"photo.png":"notes.pdf");
+      expect((await call(agents.other,"get",url)).status).toBe(403);
+    }
+    expect(await models.MessageAttachment.countDocuments()).toBe(2);
+    expect((await call(agents.alumni,"delete",`/conversations/${id}/messages/${sent.body.item._id}`)).status).toBe(200);
+    expect(await models.MessageAttachment.countDocuments()).toBe(0);
+  });
+  it("rejects an invalid batch without partially saving valid attachments", async () => {
+    const id=(await accepted())._id;
+    const result=await agents.alumni.agent.post(`/api/v1/conversations/${id}/attachments`).set("Origin",config.origin).set("X-CSRF-Token",agents.alumni.token).field("body","").attach("files",await image(),{filename:"photo.png",contentType:"image/png"}).attach("files",Buffer.from("invalid"),{filename:"bad.pdf",contentType:"application/pdf"});
+    expect(result.status).toBe(422);expect(await models.MessageAttachment.countDocuments()).toBe(0);expect(await Message.countDocuments()).toBe(0);
+  });
+  it("rejects spoofed, unsupported and oversized files without saving messages", async () => {
+    const id=(await accepted())._id;
+    expect((await upload("alumni",id,Buffer.from("<html>not a PDF</html>"),"bad.pdf","application/pdf")).status).toBe(422);
+    expect((await upload("alumni",id,Buffer.from("not an image"),"bad.png","image/png")).status).toBe(422);
+    expect((await upload("alumni",id,await image(),"bad.exe","application/octet-stream")).status).toBe(422);
+    expect((await upload("alumni",id,Buffer.alloc(10*1024*1024+1),"huge.pdf","application/pdf")).status).toBe(413);
+    expect(await models.MessageAttachment.countDocuments()).toBe(0);expect(await Message.countDocuments()).toBe(0);
+  });
+  it("preserves viewing in completed and conversion archives but prevents new uploads", async () => {
+    const id=(await accepted())._id;
+    const sent=await upload("alumni",id,await image(),"history.png","image/png");expect(sent.status).toBe(201);
+    const file=`/message-attachments/${sent.body.item.attachment.id}`;
+    await Mentorship.updateOne({_id:id},{$set:{status:"completed"}});
+    expect((await call(agents.student,"get",file)).status).toBe(200);
+    expect((await upload("alumni",id,await image(),"new.png","image/png")).status).toBe(403);
+    await Mentorship.updateOne({_id:id},{$set:{closedForConversion:true}});
+    await User.updateOne({_id:users.student._id},{$set:{role:"alumni"}});
+    expect((await call(agents.student,"get",file)).status).toBe(200);
+    expect((await call(agents.other,"get",file)).status).toBe(403);
+  });
+  it("supports open member chats and blocks upload after mentorship completion", async () => {
+    await User.updateOne({_id:users.alumni._id},{$set:{contactPreference:"open"}});
+    const id=(await call(agents.student,"post","/direct-conversations",{recipient:String(users.alumni._id)})).body.item._id;
+    const sent=await upload("student",id,await image(),"question.png","image/png");expect(sent.status).toBe(201);
+    await Mentorship.create({student:users.student._id,mentor:users.alumni._id,title:"Completed",description:"Guidance",status:"completed"});
+    expect((await upload("student",id,await image(),"new.png","image/png")).status).toBe(403);
+    expect((await call(agents.alumni,"get",`/message-attachments/${sent.body.item.attachment.id}`)).status).toBe(200);
+  });
+});
+
+
+it("reserves account deletion for Super Admin, rejects blocking and permits administrative profile viewing", async () => {
+  const record=await VerifiedUser.create({name:users.student.name,email:users.student.email,universityId:users.student.universityId,role:"student",createdBy:users.admin._id,claimed:true,claimedBy:users.student._id});
+  expect((await call(agents.admin,"delete",`/admin/users/${users.student._id}`)).status).toBe(403);
+  expect((await call(agents.admin,"delete",`/admin/verified-users/${record._id}`)).status).toBe(403);
+  for (const actor of [agents.admin,agents.superadmin]) {
+    expect((await call(actor,"patch",`/admin/users/${users.student._id}`,{status:"blocked"})).status).toBe(422);
+    expect((await call(actor,"patch",`/admin/verified-users/${record._id}`,{status:"blocked"})).status).toBe(422);
+    expect((await call(actor,"patch",`/admin/users/${users.student._id}`,{active:false})).status).toBe(422);
+  }
+  expect((await User.findById(users.student._id)).status).toBe("active");
+  expect((await call(agents.admin,"patch",`/admin/users/${users.student._id}`,{status:"suspended",suspensionDays:2})).status).toBe(200);
+  expect((await call(agents.admin,"get",`/users/${users.student._id}`)).status).toBe(200);
+  expect((await call(agents.other,"get",`/users/${users.student._id}`)).status).toBe(404);
+  expect((await call(agents.admin,"patch",`/admin/users/${users.student._id}`,{status:"active"})).status).toBe(200);
+  expect((await call(agents.superadmin,"delete",`/admin/users/${users.student._id}`)).status).toBe(200);
+  expect((await VerifiedUser.findById(record._id)).status).toBe("deleted");
+});
+
+
+describe("Private feed favorites", () => {
+  it("saves and removes favorites for every role without sharing them or sending notifications", async () => {
+    const post=await Post.create({author:users.admin._id,body:"Save this update",visibility:"published",topics:["Community"]});
+    const path=`/feed/posts/${post._id}`;
+    const before=await models.Notification.countDocuments();
+    for (const role of ["student","alumni","admin","superadmin"]) {
+      expect((await call(agents[role],"put",path+"/favorite",{favorite:true})).status).toBe(200);
+      expect((await call(agents[role],"get",path)).body.item.stats.favorite).toBe(true);
+      const list=await call(agents[role],"get","/feed?mode=favorites");
+      expect(list.status).toBe(200);expect(list.body.items.map(p=>p._id)).toEqual([String(post._id)]);
+      expect((await call(agents[role],"put",path+"/favorite",{favorite:false})).status).toBe(200);
+      expect((await call(agents[role],"get","/feed?mode=favorites")).body.total).toBe(0);
+    }
+    await call(agents.student,"put",path+"/favorite",{favorite:true});
+    expect((await call(agents.other,"get",path)).body.item.stats.favorite).toBe(false);
+    expect((await call(agents.other,"get","/feed?mode=favorites")).body.total).toBe(0);
+    expect(await models.Notification.countDocuments()).toBe(before);
+    expect((await call(agents.student,"put",path+"/favorite",{favorite:"false"})).status).toBe(422);
+  });
+  it("keeps viewed favorites, paginates them and excludes hidden or deleted content", async () => {
+    const posts=await Post.create(Array.from({length:22},(_,i)=>({author:users.admin._id,body:`Saved ${i}`,visibility:"published",topics:["Community"]})));
+    for (const [i,post] of posts.entries()) await FeedInteraction.create({kind:"posts",record:post._id,user:users.student._id,favoritedAt:new Date(100000+i*1000),viewedAt:new Date()});
+    let list=await call(agents.student,"get","/feed?mode=favorites");
+    expect(list.body.total).toBe(22);expect(list.body.pages).toBe(2);expect(list.body.items).toHaveLength(20);expect(list.body.items[0]._id).toBe(String(posts[21]._id));
+    expect((await call(agents.student,"get","/feed?mode=favorites&page=2")).body.items).toHaveLength(2);
+    await Post.updateOne({_id:posts[21]._id},{$set:{visibility:"hidden"}});
+    await Post.deleteOne({_id:posts[20]._id});
+    list=await call(agents.student,"get","/feed?mode=favorites");expect(list.body.total).toBe(20);expect(list.body.pages).toBe(1);
+    expect((await call(agents.student,"put",`/feed/posts/${posts[21]._id}/favorite`,{favorite:true})).status).toBe(404);
+    expect((await call(agents.student,"get","/feed?mode=latest")).body.total).toBe(20);
+    expect((await call(agents.student,"get","/feed?mode=for-you")).body.total).toBe(0);
+  });
+});
+
+
+it("preserves private viewed history and favorites across logout and login for every role", async()=>{
+  const saved=await Post.create({author:users.admin._id,body:"Already read and saved",visibility:"published"});
+  const unseen=await Post.create({author:users.admin._id,body:"Still unread",visibility:"published"});
+  const firstSeen=new Date(Date.now()-86400000);
+  for(const role of ["student","alumni","admin","superadmin"]) {
+    await FeedInteraction.create({kind:"posts",record:saved._id,user:users[role]._id,viewedAt:firstSeen,favoritedAt:firstSeen});
+    expect((await call(agents[role],"post",`/feed/posts/${saved._id}/view`)).status).toBe(200);
+    expect((await FeedInteraction.findOne({record:saved._id,user:users[role]._id})).viewedAt.getTime()).toBe(firstSeen.getTime());
+    expect((await call(agents[role],"post","/auth/logout")).status).toBe(200);
+    const returning=await client();
+    expect((await call(returning,"post","/auth/login",{identifier:users[role].email,password:pass})).status).toBe(200);
+    const options=await call(returning,"get","/feed/options");expect(options.body.feedCutoff).toBeTruthy();
+    const feed=await call(returning,"get","/feed?mode=for-you&cutoff="+encodeURIComponent(options.body.feedCutoff));
+    expect(feed.body.items.map(p=>p._id)).toEqual([String(unseen._id)]);
+    expect((await call(returning,"get","/feed?mode=viewed")).body.items.map(p=>p._id)).toEqual([String(saved._id)]);
+    expect((await call(returning,"get","/feed?mode=favorites")).body.items.map(p=>p._id)).toEqual([String(saved._id)]);
+  }
+  expect((await call(agents.other,"get","/feed?mode=viewed")).body.total).toBe(0);
+  expect((await call(agents.other,"get","/feed?mode=favorites")).body.total).toBe(0);
 });

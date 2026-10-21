@@ -1,3 +1,4 @@
+import { FeedBack } from "../components/FeedBack.jsx";
 import { ContactNumber } from "../components/ContactNumber.jsx";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
@@ -63,6 +64,7 @@ import {
   Brand,
   AuthProvider,
 } from "../components/ui.jsx";
+const canEdit = (user, item) => user.role === "superadmin" || String(item.owner?._id || item.owner) === String(user._id);
 const resourceFields = {
   jobs: [
     {
@@ -322,9 +324,9 @@ function ResourceTools({ kind, item, reload }) {
     <section className="card resource-owner">
       <span className="eyebrow">POST MANAGEMENT</span>
       <div className="row wrap">
-        <button className="primary" onClick={() => setEdit(true)}>
+        {canEdit(user, item) && <button className="primary" onClick={() => setEdit(true)}>
           Edit / update post
-        </button>
+        </button>}
         {["archived", "published", ...(admin(user) ? ["hidden"] : [])]
           .filter((v) => v !== (item.visibility || "published"))
           .map((v) => (
@@ -399,6 +401,9 @@ function ResourceFacts({ kind, item }) {
   );
 }
 function Resources({ kind }) {
+  const location = useLocation(), navigate = useNavigate();
+  const [period, setPeriod] = useState(() => new URLSearchParams(location.search).get("period") || "all");
+  useEffect(() => { setPeriod(new URLSearchParams(location.search).get("period") || "all"); setPage(1); }, [location.search]);
   const { user } = useAuth(),
     [page, setPage] = useState(1),
     [q, setQ] = useState(""),
@@ -412,9 +417,11 @@ function Resources({ kind }) {
     setModal(false);
   }, [kind]);
   const { data, error, loading, reload } = useLoad(
-    `/${kind}?page=${page}&q=${encodeURIComponent(q)}&mine=${mine}`,
+    `/${kind}?page=${page}&q=${encodeURIComponent(q)}&mine=${mine}&period=${period}`,
   );
   const canCreate = admin(user) || user.role === "alumni";
+  useEffect(() => { if (["events", "jobs"].includes(kind)) { setMine(canCreate && new URLSearchParams(location.search).get("mine") === "true"); setPage(1); } }, [kind, location.search, canCreate]);
+  useEffect(() => { if (canCreate && new URLSearchParams(location.search).get("create") === "true") { setEditing(null); setModal(true); } }, [kind, location.search, canCreate]);
   const titles = {
     jobs: [
       "Your next opportunity",
@@ -446,6 +453,15 @@ function Resources({ kind }) {
           </button>
         )}
       </Head>
+      {kind === "events" && <div className="event-list-controls"><div className="event-scope-tabs" role="group" aria-label="Event ownership">
+        <button aria-pressed={!mine} className={!mine ? "selected" : ""} onClick={() => navigate("/app/events?mine=false")} >All events <span>{data?.allTotal ?? "—"}</span></button>
+        {canCreate && <button aria-pressed={mine} className={mine ? "selected" : ""} onClick={() => navigate("/app/events?mine=true")}>My events <span>{data?.myTotal ?? "—"}</span></button>}
+      </div></div>}
+      {kind === "events" && <label>Event period<select value={period} onChange={e => {setPeriod(e.target.value);setPage(1);}}><option value="all">Any date</option><option value="upcoming">Upcoming events</option><option value="past">Past events</option></select></label>}
+      {kind === "jobs" && <div className="event-list-controls"><div className="event-scope-tabs" role="group" aria-label="Opportunity ownership">
+        <button type="button" aria-pressed={!mine} className={!mine ? "selected" : ""} onClick={() => navigate("/app/jobs?mine=false")}>All Opportunities</button>
+        {canCreate && <button type="button" aria-pressed={mine} className={mine ? "selected" : ""} onClick={() => navigate("/app/jobs?mine=true")}>My Opportunities</button>}
+      </div></div>}
       {kind === "jobs" && (
         <div className="row filters">
           <div className="search-box">
@@ -460,19 +476,7 @@ function Resources({ kind }) {
               }}
             />
           </div>
-          {canCreate && (
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={mine}
-                onChange={(e) => {
-                  setMine(e.target.checked);
-                  setPage(1);
-                }}
-              />
-              My listings
-            </label>
-          )}
+
         </div>
       )}
       <Notice error={error} />
@@ -535,17 +539,16 @@ function Resources({ kind }) {
                   View details <ArrowUpRight size={15} />
                 </Link>
                 {(admin(user) ||
-                  (kind === "jobs" &&
-                    String(item.owner?._id || item.owner) === user._id)) && (
+                  String(item.owner?._id || item.owner) === user._id) && (
                   <>
-                    <button
+                    {canEdit(user, item) && <button
                       onClick={() => {
                         setEditing(item);
                         setModal(true);
                       }}
                     >
                       Edit
-                    </button>
+                    </button>}
                     {true && (
                       <Action
                         run={async () => {
@@ -563,7 +566,7 @@ function Resources({ kind }) {
           ))}
         </div>
       ) : (
-        <Empty />
+        <Empty>{kind === "events" && period === "upcoming" ? "No upcoming events." : kind === "events" && mine ? "You have not created any events yet." : "No posts found."}</Empty>
       )}
       <Pager {...{ data, page, setPage }} />
       {kind === "donations" && <Contributions />}
@@ -592,6 +595,7 @@ function JobDetails() {
   const item = data?.item;
   return (
     <>
+      <FeedBack/>
       <Notice error={error} />
       {item && (
         <>
@@ -644,6 +648,7 @@ function EventDetails() {
   const item = data?.item;
   return (
     <>
+      <FeedBack/>
       <Notice error={error} />
       {item && (
         <>
@@ -878,6 +883,7 @@ function DonationDetails() {
   const item = data?.item;
   return (
     <>
+      <FeedBack/>
       <Notice error={error} />
       {item && (
         <>
@@ -901,7 +907,7 @@ function DonationDetails() {
             <p className="preserve"><LinkedText text={item.instructions} /></p>
           </article>
           {item.mode !== "information" && item.status === "open" && String(item.owner?._id || item.owner) !== user._id && <DonationPayment item={item} onChanged={reload}/>}
-          {(admin(user) || String(item.owner?._id || item.owner) === user._id) && <DonationContributors id={id} onChanged={reload}/>}
+          {item.mode !== "information" && (admin(user) || String(item.owner?._id || item.owner) === user._id) && <DonationContributors id={id} onChanged={reload}/>}
         </>
       )}
     </>

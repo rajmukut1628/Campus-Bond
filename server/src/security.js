@@ -173,5 +173,5 @@ export async function list(Model, filter, req, populate) {
   return { items, total, page: number, pages: Math.ceil(total / limit) };
 }
 export const publicFields =
-  "name role department graduationYear bio skills company position experience linkedin avatar mentoring headline batch workExperience qualifications socialLinks";
+  "name role department graduationYear bio skills company position experience linkedin avatar mentoring contactPreference headline batch workExperience qualifications socialLinks";
 export const safeUrl = (value) => !value || /^https:\/\/[^\s]+$/i.test(value);

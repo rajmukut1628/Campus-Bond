@@ -44,15 +44,15 @@ const statusRules = [
   body("suspensionDays").optional().isInt({ min: 1, max: 3650 }),
   body("suspensionReason").optional().isString().trim().isLength({ max: 500 }),
   body().custom(v => v.status !== "suspended" || Number.isInteger(Number(v.suspensionDays)) && Number(v.suspensionDays) >= 1 && Number(v.suspensionDays) <= 3650).withMessage("Choose a suspension duration from 1 to 3650 days"),
-  body("status").optional().isIn(["active", "suspended", "blocked"]),
-  body("active").optional().isBoolean(),
+  body("status").optional().isIn(["active", "suspended"]),
+  body("active").optional().isBoolean().custom(value => value === true || value === "true").withMessage("Use Suspend with a duration to restrict an account"),
   body().custom(
     (v) => Object.hasOwn(v, "status") || Object.hasOwn(v, "active"),
   ),
   validate,
 ];
 const statusOf = (req) =>
-  req.body.status ?? (req.body.active ? "active" : "blocked");
+  req.body.status ?? "active";
 const actor = freshAdministrator;
 async function target(req, s, adminOnly = false) {
   const who = await actor(req, s);
@@ -174,7 +174,7 @@ export function managementRoutes(config) {
       });
       res.json({ user, message: "Account status updated" });
     });
-    r.delete(path, guard, id, async (req, res) => {
+    r.delete(path, roles("superadmin"), guard, id, async (req, res) => {
       await tx((s) => changeMember(req, s, "deleted", onlyAdmin));
       res.json({
         message:
@@ -234,7 +234,7 @@ export function managementRoutes(config) {
     r[method](
       "/admin/verified-users/:id",
       id,
-      ...(method === "patch" ? [statusRules] : []),
+      ...(method === "patch" ? [statusRules] : [roles("superadmin")]),
       async (req, res) => {
         let item;
         await tx(async (s) => {
@@ -273,7 +273,7 @@ export function managementRoutes(config) {
     ...identityRules.slice(1, 3),
     body("password")
       .isString()
-      .isLength({ min: 11, max: 72 })
+      .isLength({ min: 8, max: 72 })
       .custom((v) => Buffer.byteLength(v, "utf8") <= 72),
     validate,
     async (req, res) => {

@@ -79,19 +79,18 @@ function Notifications() {
   useEffect(() => { const refresh = () => { if (!document.hidden) reload(); }; const timer = setInterval(refresh, 20000); window.addEventListener("focus", refresh); return () => { clearInterval(timer); window.removeEventListener("focus", refresh); }; }, [category, status, page]);
   const changed = () => { reload(); window.dispatchEvent(new Event("notifications-changed")); };
   const mark = async (item, read) => { await api.patch(`/notifications/${item._id}`, { read }); changed(); };
-  return <>
-    <Head eyebrow={view.label} title={view.title} description={view.description}>
-      <Action run={async () => { await api.patch("/notifications/read"); changed(); }}>Mark all read <Check size={16} /></Action>
-    </Head>
-    <div className="notification-overview">
-      <div><span className="eyebrow">YOUR INBOX</span><strong>{data?.unread || 0}<small>unread updates</small></strong><p>Personal updates. Clear next steps.</p></div>
-      <div><span className="eyebrow">{view.focus}</span><p>{view.note}</p><div className="notification-shortcuts">{view.links.map(([path, label]) => <Link key={path} to={path}>{label} <ArrowUpRight size={13} /></Link>)}</div></div>
+  return <section className={`notifications-compact role-${user.role}`}>
+    <header className="notifications-compact-heading">
+      <div className="row"><h1>Notifications</h1><span className="notification-unread-count" aria-label={`${data?.unread || 0} unread notifications`}>{data?.unread ?? "—"} unread</span></div>
+      <div className="row"><button onClick={reload} disabled={loading}>Refresh</button><Action run={async () => { await api.patch("/notifications/read"); changed(); }}>Mark all read <Check size={16}/></Action></div>
+    </header>
+    <Notice error={error || actionError}/>
+    <div className="notifications-compact-filters">
+      <div className="notification-status" role="group" aria-label="Read status">{[["all","All"],["unread","Unread"],["read","Read"]].map(([key,label]) => <button key={key} aria-pressed={status === key} className={status === key ? "active" : ""} onClick={() => {setStatus(key);setPage(1);}}>{label}</button>)}</div>
+      <label className="notification-category-select"><span>Category</span><select value={category} onChange={e => {setCategory(e.target.value);setPage(1);}}>{[["","All activity"],...view.categories].map(([key,label]) => <option key={key} value={key}>{label}{key && counts[key]?.unread ? ` (${counts[key].unread})` : ""}</option>)}</select></label>
+      <small>{data?.total ?? "—"} updates</small>
     </div>
-    <Notice error={error || actionError} />
-    <div className="notification-filters" aria-label="Notification categories">
-      {[["", "All activity"], ...view.categories].map(([key,label]) => <button key={key} className={category === key ? "active" : ""} onClick={() => { setCategory(key); setPage(1); }}>{label}{(key ? counts[key]?.unread : data?.unread) > 0 && <span>{key ? counts[key].unread : data.unread}</span>}</button>)}
-    </div>
-    <div className="notification-toolbar"><div className="notification-status" aria-label="Read status">{[["all", "All"], ["unread", "Unread"], ["read", "Read"]].map(([key,label]) => <button key={key} className={status === key ? "active" : ""} onClick={() => { setStatus(key); setPage(1); }}>{label}</button>)}</div><small>{data?.total || 0} updates · newest first</small><button onClick={reload} disabled={loading}>Refresh</button></div>
+    <div className="notification-list-viewport" aria-label="Notification list" tabIndex={0}>
     {loading && !data ? <Loading /> : data?.items.length ? <div className="notification-stream">{data.items.map(item => {
       const Icon = icons[item.category] || Bell;
       return <article className={`notification-item ${item.read ? "" : "unread"}`} key={item._id}>
@@ -102,8 +101,9 @@ function Notifications() {
         <Action run={() => mark(item, !item.read)}>{item.read ? "Mark unread" : "Mark read"}</Action>
       </article>;
     })}</div> : <div className="notification-empty"><Bell size={30} /><h2>{status === "unread" ? "You’re all caught up." : "No updates here yet."}</h2><p>Relevant activity will appear here automatically.</p></div>}
-    <Pager {...{ data, page, setPage }} />
-  </>;
+    </div>
+    <Pager {...{ data, page, setPage }} numbered />
+  </section>;
 }
 function Management({ kind }) {
   const { data: accountOptions } = useLoad("/admin/account-options");
@@ -193,9 +193,9 @@ function Management({ kind }) {
       ? [
           {
             name: "password",
-            label: "Password (minimum 11 characters)",
+            label: "Password (minimum 8 characters)",
             type: "password",
-            minLength: 11,
+            minLength: 8,
           },
         ]
       : []),
@@ -208,7 +208,6 @@ function Management({ kind }) {
         : "Manage administrators";
   const actionText = {
     suspended: "Suspend",
-    blocked: "Block",
     active: "Reactivate",
     delete: "Delete",
     transfer: "Transfer ownership",
@@ -343,13 +342,14 @@ function Management({ kind }) {
           </p>
         </div>
       )}
-      <section className="card management-table">
+      <section className={`card management-table refreshed-management management-${kind}`}>
         {loading ? (
           <Loading />
         ) : data?.items.length ? (
           data.items.map((item) => (
             <div className="table-row management-row" key={item._id}>
               <div className="member-identity">
+                <Avatar user={item}/>
                 <strong>{item.name}</strong>
                 <small>
                   {item.email}{!["admin", "superadmin"].includes(item.role) && ` · ${item.universityId}`}
@@ -372,6 +372,7 @@ function Management({ kind }) {
                 )}
               </div>
               <div className="management-actions">
+                {(["student", "alumni"].includes(item.role) && (kind === "users" || kind === "verified" && item.claimedBy)) && <Link className="button member-view-button" to={`/app/members/${kind === "verified" ? item.claimedBy?._id || item.claimedBy : item._id}`}>View profile <ArrowUpRight size={14}/></Link>}
                 {kind === "verified" && !item.claimed && item.active && (
                   <button
                     className="primary"
@@ -400,11 +401,6 @@ function Management({ kind }) {
                     >
                       Suspend
                     </button>
-                    <button
-                      onClick={() => setOperation({ item, type: "blocked" })}
-                    >
-                      Block
-                    </button>
                   </>
                 ) : (
                   <>
@@ -413,13 +409,6 @@ function Management({ kind }) {
                     >
                       Reactivate
                     </button>
-                    {stateOf(item) === "suspended" && (
-                      <button
-                        onClick={() => setOperation({ item, type: "blocked" })}
-                      >
-                        Block
-                      </button>
-                    )}
                   </>
                 )}
                 {kind === "admins" && stateOf(item) === "active" && (
@@ -430,12 +419,12 @@ function Management({ kind }) {
                     Transfer ownership
                   </button>
                 )}
-                <button
+                {user.role === "superadmin" && <button
                   className="danger-button"
                   onClick={() => setOperation({ item, type: "delete" })}
                 >
                   Delete
-                </button>
+                </button>}
               </div>
             </div>
           ))
