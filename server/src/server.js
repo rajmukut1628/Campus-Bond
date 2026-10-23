@@ -19,7 +19,7 @@ try {
   suspensionTimer.unref();
   const server = createApp(config).listen(config.port, () =>
     console.log(
-      `NUB Connect API: http://localhost:${config.port}; MongoDB connected`,
+      `CampusBond API: http://localhost:${config.port}; MongoDB connected`,
     ),
   );
   for (const signal of ["SIGINT", "SIGTERM"])

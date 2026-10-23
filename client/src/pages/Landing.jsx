@@ -15,7 +15,7 @@ import {
 import { useAuth } from "../components/ui.jsx";
 import "./welcome.css";
 
-export function NetworkScene({ CenterIcon = GraduationCap, label = "NUB CONNECT" }) {
+export function NetworkScene({ CenterIcon = GraduationCap, label = "CampusBond" }) {
   return <div className="welcome-scene welcome-clean-scene" aria-hidden="true">
     <div className="welcome-scene-surface">
       <div className="welcome-scene-grid" />
@@ -85,7 +85,7 @@ export function Landing() {
         {!reduced && <button className="welcome-motion-control welcome-global-motion" onClick={() => setPaused(!paused)} aria-pressed={paused} aria-label={paused ? "Play welcome animation" : "Pause welcome animation"}>{paused ? <Play size={15}/> : <Pause size={15}/>}</button>}
         <header className="welcome-header">
           <div className="welcome-brand">
-            <div className="brand" aria-label="NUB Connect"><span className="brand-mark"><GraduationCap size={24} /></span><strong>NUB<br />Connect.</strong></div>
+            <div className="brand" aria-label="CampusBond"><span className="brand-mark"><GraduationCap size={24} /></span><strong>NUB<br />Connect.</strong></div>
           </div>
           <nav aria-label="Welcome navigation">
             <Link className="button welcome-nav-login" to={destination}>
@@ -138,7 +138,7 @@ export function Landing() {
           </section>
         </main>
         <footer className="welcome-footer">
-          <div className="welcome-copyright-theme"><span>© {new Date().getFullYear()} NUB Connect</span><button className="theme-toggle" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to sky blue theme" : "Switch to dark theme"} title={theme === "dark" ? "Sky blue theme" : "Dark theme"} aria-pressed={theme === "light"}>{theme === "dark" ? <Sun size={15}/> : <Moon size={15}/>}</button></div>
+          <div className="welcome-copyright-theme"><span>© {new Date().getFullYear()} CampusBond</span><button className="theme-toggle" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to sky blue theme" : "Switch to dark theme"} title={theme === "dark" ? "Sky blue theme" : "Dark theme"} aria-pressed={theme === "light"}>{theme === "dark" ? <Sun size={15}/> : <Moon size={15}/>}</button></div>
         </footer>
       </div>
     </div>

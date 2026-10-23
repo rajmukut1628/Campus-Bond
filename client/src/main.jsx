@@ -349,7 +349,7 @@ function Shell() {
           </Routes>
         </main>
         <footer>
-          NUB Connect <span>A community that moves you forward.</span>
+          CampusBond <span>A community that moves you forward.</span>
         </footer>
       </div>
     </div>

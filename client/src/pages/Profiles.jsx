@@ -71,7 +71,7 @@ export function ProfileSummary({ user }) {
         <div className="profile-cover">
           <div className="profile-orbit-art" aria-hidden="true"><i/><i/><i/><span/></div>
           <span>
-            <GraduationCap size={20} /> NUB CONNECT
+            <GraduationCap size={20} /> CampusBond
           </span>
           <Status value={user.role} />
         </div>

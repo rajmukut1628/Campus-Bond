@@ -1,7 +1,7 @@
-# Gmail setup — NUB Connect
+# Gmail setup — CampusBond
 
 1. আপনার Gmail-এর Google Account → Security থেকে **2-Step Verification** চালু করুন।
-2. https://myaccount.google.com/apppasswords খুলে NUB Connect নামে App Password তৈরি করুন।
+2. https://myaccount.google.com/apppasswords খুলে CampusBond নামে App Password তৈরি করুন।
 3. Project root-এর private `.env.mail` file-এ লিখুন:
 
 ```dotenv
@@ -9,7 +9,7 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
 SMTP_USER=your-email@gmail.com
 SMTP_PASS=your-16-character-app-password
-MAIL_FROM_NAME=NUB Connect
+MAIL_FROM_NAME=CampusBond
 ```
 
 Project root-এর file: `.env.mail`। এটি ইতিমধ্যে configure করা হয়েছে। সাধারণ Gmail password বসাবেন না। App Password-এর মাঝের spaces server বাদ দেয়। Save করলেই পরবর্তী mail-এ নতুন configuration ব্যবহৃত হবে। Password chat-এ পাঠানোর প্রয়োজন নেই।

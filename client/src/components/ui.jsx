@@ -405,7 +405,7 @@ function Action({ children, run, className = "", title, "aria-label": ariaLabel 
 function Brand() {
   const { user } = useAuth();
   return (
-    <Link className="brand" aria-label="NUB Connect" to={user ? "/app/feed" : "/"}>
+    <Link className="brand" aria-label="CampusBond" to={user ? "/app/feed" : "/"}>
       <span className="brand-mark">
         <GraduationCap size={25} />
       </span>
