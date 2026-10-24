@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-    "build": "npm run build --prefix client",
-    "test": "npm run test --prefix server",
-    "start": "npm start --prefix server",
-    "seed": "npm run seed --prefix server",
-    "dev:local": "concurrently \"npm run dev:local --prefix server\" \"npm run dev --prefix client\""
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "build": "npm run build --prefix frontend",
+    "test": "npm run test --prefix backend",
+    "start": "npm start --prefix backend",
+    "seed": "npm run seed --prefix backend",
+    "dev:local": "concurrently \"npm run dev:local --prefix backend\" \"npm run dev --prefix frontend\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

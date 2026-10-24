@@ -2,7 +2,7 @@ node_modules/
 .env
 .env.*
 !.env.example
-client/dist/
+frontend/dist/
 coverage/
 *.log
 .DS_Store
@@ -31,3 +31,6 @@ account-import-*.csv
 /University-Connect-*.jpg
 /University-Connect-*.jpeg
 /VERIFICATION.md
+
+# Backend-only private reports and local data
+backend/private/
