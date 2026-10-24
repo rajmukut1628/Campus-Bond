@@ -1,3 +1,4 @@
+import {feedSnapshot, invalidateFeed, feedStreamKey} from "../lib/feedCacheState.js";
 import { useEffect, useRef, useState } from "react";
 import { api, errorText } from "../components/ui.jsx";
 
@@ -13,16 +14,18 @@ export function useFeedCache(url, scope) {
   const key = scope + url;
   useEffect(() => {
     if (!url) return;
-    const bucket = store.current, cached = bucket.entries.get(url), controller = new AbortController();
+    const bucket = store.current, snapshot = feedSnapshot(bucket,url), controller = new AbortController();
+    if(bucket.retained?.stream !== feedStreamKey(url))bucket.retained=null;
     let active = true;
     bucket.controllers.add(controller);
-    setState({ key, data: cached?.data || null, loading: !cached?.data, refreshing: true, error: "" });
+    setState({ key, data: snapshot || null, loading: !snapshot, refreshing: true, error: "" });
     api.get(url, { signal: controller.signal }).then(response => {
       if (!active) return;
       bucket.entries.set(url, { data: response.data, time: Date.now() });
+      bucket.retained=null;
       setState({ key, data: response.data, loading: false, refreshing: false, error: "" });
     }).catch(error => {
-      if (active && !controller.signal.aborted) setState({ key, data: cached?.data || null, loading: false, refreshing: false, error: errorText(error) });
+      if (active && !controller.signal.aborted) setState({ key, data: snapshot || null, loading: false, refreshing: false, error: errorText(error) });
     }).finally(() => bucket.controllers.delete(controller));
     return () => { active = false; controller.abort(); };
   }, [url, scope, version]);
@@ -39,11 +42,8 @@ export function useFeedCache(url, scope) {
     }).catch(() => { if (bucket.generation === generation) bucket.entries.delete(target); })
       .finally(() => bucket.controllers.delete(controller));
   };
-  const reload = () => {
-    const bucket = store.current;
-    bucket.generation++;
-    for (const controller of bucket.controllers) controller.abort();
-    bucket.entries.clear();
+  const reload = ({keepPrevious=false}={}) => {
+    invalidateFeed(store.current,url,state.key === key ? state.data : null,keepPrevious);
     setVersion(v => v + 1);
   };
   const updateFavorite = (kind, id, favorite) => {
@@ -75,6 +75,6 @@ export function useFeedCache(url, scope) {
         .finally(()=>bucket.controllers.delete(controller));
     }
   };
-  const cached = store.current.entries.get(url)?.data;
-  return { ...(state.key === key ? state : { data: cached || null, loading: !cached?.data, refreshing: true, error: "" }), reload, prefetch, updateFavorite };
+  const cached = feedSnapshot(store.current,url);
+  return { ...(state.key === key ? state : { data: cached || null, loading: !cached, refreshing: true, error: "" }), reload, prefetch, updateFavorite };
 }

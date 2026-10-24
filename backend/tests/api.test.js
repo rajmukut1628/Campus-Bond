@@ -2338,6 +2338,27 @@ describe("Premium unified Newsfeed", () => {
     });
     return { post, job, event, donation };
   }
+  it("filters recommendations by each role's own interests without filtering history or all posts", async () => {
+    const f=await fixture();
+    const choices={student:["Technology",f.post],alumni:["Careers",f.job],admin:["Community",f.event],superadmin:["Education",f.donation]};
+    for(const [role,[topic,item]] of Object.entries(choices)) {
+      expect((await call(agents[role],"patch","/users/me",{interests:[topic]})).status).toBe(200);
+      const response=await call(agents[role],"get","/feed?mode=for-you");
+      expect(response.status).toBe(200);
+      expect(response.body.items.map(post=>post._id)).toEqual([String(item._id)]);
+      expect(response.body.total).toBe(1);
+      expect((await call(agents[role],"get","/feed?mode=latest")).body.total).toBe(4);
+    }
+    await FeedInteraction.create({kind:"events",record:f.event._id,user:users.student._id,viewedAt:new Date(),favoritedAt:new Date()});
+    for(const mode of ["viewed","favorites"])expect((await call(agents.student,"get","/feed?mode="+mode)).body.items.map(post=>post._id)).toEqual([String(f.event._id)]);
+    await call(agents.student,"patch","/users/me",{interests:["Sports"]});
+    expect((await call(agents.student,"get","/feed")).body.total).toBe(0);
+    await call(agents.student,"patch","/users/me",{interests:[]});
+    expect((await call(agents.student,"get","/feed")).body.total).toBe(3);
+    expect((await call(agents.alumni,"get","/auth/me")).body.user.interests).toEqual(["Careers"]);
+    await Post.create({author:users.admin._id,body:"Hidden sports post",topics:["Sports"],visibility:"hidden"});
+    expect((await call(agents.admin,"get","/feed?mode=moderation&visibility=hidden")).body.total).toBe(1);
+  });
   it("combines resources, sorts latest and reranks when interests change", async () => {
     const f = await fixture();
     let r = await call(agents.student, "get", "/feed?mode=latest");

@@ -1,9 +1,6 @@
-import { useTheme } from "../lib/theme.js";
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Sun,
-  Moon,
   ArrowUpRight,
   GraduationCap,
   Users,
@@ -37,7 +34,6 @@ export function NetworkScene({ CenterIcon = GraduationCap, label = "CampusBond" 
 }
 
 export function Landing() {
-  const { theme, toggleTheme } = useTheme();
   const { user } = useAuth(),
     [paused, setPaused] = useState(false),
     [reduced, setReduced] = useState(false);
@@ -138,7 +134,7 @@ export function Landing() {
           </section>
         </main>
         <footer className="welcome-footer">
-          <div className="welcome-copyright-theme"><span>© {new Date().getFullYear()} CampusBond</span><button className="theme-toggle" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to sky blue theme" : "Switch to dark theme"} title={theme === "dark" ? "Sky blue theme" : "Dark theme"} aria-pressed={theme === "light"}>{theme === "dark" ? <Sun size={15}/> : <Moon size={15}/>}</button></div>
+          <div className="welcome-copyright-theme"><span>© {new Date().getFullYear()} CampusBond</span></div>
         </footer>
       </div>
     </div>

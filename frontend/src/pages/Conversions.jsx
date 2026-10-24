@@ -74,7 +74,7 @@ export function ConversionReview() {
             type="search"
             value={q}
             maxLength={100}
-            placeholder="Name, email or university ID"
+            placeholder="Name, Email"
             onChange={(e) => {
               setQ(e.target.value);
               setPage(1);

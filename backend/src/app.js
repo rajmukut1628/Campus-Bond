@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import { routes } from "./routes.js";
 import { csrf, apiRateKey } from "./security.js";
 export function createApp(config) {
+  const databaseReady = () => mongoose.connection.readyState === 1 && (!config.databaseReady || config.databaseReady());
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", config.proxyHops || false);
@@ -27,10 +28,14 @@ export function createApp(config) {
     }),
   );
   app.get("/health", (req, res) =>
-    res.status(mongoose.connection.readyState === 1 ? 200 : 503).json({
-      status: mongoose.connection.readyState === 1 ? "ready" : "unavailable",
+    res.status(databaseReady() ? 200 : 503).json({
+      status: databaseReady() ? "ready" : "unavailable",
     }),
   );
+  app.use("/api/v1", (req, res, next) => {
+    if (!databaseReady()) return res.status(503).set("Retry-After", "10").json({ message: "Database connection is temporarily unavailable. Please try again shortly." });
+    next();
+  });
   app.use("/api/v1", async (req, res, next) => { await expireSuspensions(); next(); }, csrf(config), recordActivity, routes(config));
   app.use((req, res) =>
     res.status(404).json({ message: "Endpoint not found" }),

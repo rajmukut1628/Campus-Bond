@@ -1,3 +1,6 @@
+import {eventAvailability, jobApplicationsOpen} from "../lib/resourceAvailability.js";
+import {useAvailabilityRefresh} from "../lib/useAvailabilityRefresh.js";
+import {canContribute, canReviewContribution, campaignEnded} from "../lib/givingAccess.js";
 import {listKey,readListPosition} from "../lib/listNavigation.js";
 import {useListReturn} from "../lib/useListReturn.js";
 import { FeedBack } from "../components/FeedBack.jsx";
@@ -390,6 +393,8 @@ function ResourceFacts({ kind, item }) {
             <dd className="preserve">
               {["endsAt", "registrationDeadline", "deadline"].includes(k) ? (
                 date(item[k])
+              ) : k === "applicationEmail" && jobApplicationsOpen(item) ? (
+                <a href={`mailto:${encodeURIComponent(item[k])}`}>{item[k]}</a>
               ) : k === "onlineUrl" ? (
                 <a href={item[k]} target="_blank" rel="noreferrer">
                   Join online event ↗
@@ -584,6 +589,7 @@ function Resources({ kind }) {
 function JobDetails() {
   const { id } = useParams(),
     { data, error, loading, reload } = useLoad(`/jobs/${id}`);
+  useAvailabilityRefresh(reload,data?.item?.closesAt);
   if (loading && !data) return <Loading />;
   const item = data?.item;
   return (
@@ -601,7 +607,7 @@ function JobDetails() {
             <PostAuthor item={item} />
             <Cover item={item} />
             <ResourceFacts kind="jobs" item={item} />
-            <Status value={item.status} />
+            <Status value={jobApplicationsOpen(item) ? "open" : "closed"} />
             <p>
               {item.type} · Closes {date(item.closesAt)}
             </p>
@@ -610,7 +616,9 @@ function JobDetails() {
               number={item.contactNumber}
               label="Recruiter contact"
             />
-            {item.applicationUrl ? (
+            {!jobApplicationsOpen(item) ? (
+              <div className="notice" role="status">Applications closed.</div>
+            ) : item.applicationUrl ? (
               <a
                 className="button primary"
                 href={item.applicationUrl}
@@ -619,6 +627,8 @@ function JobDetails() {
               >
                 View application page <ArrowUpRight size={17} />
               </a>
+            ) : item.applicationEmail ? (
+              <a className="button primary" href={`mailto:${encodeURIComponent(item.applicationEmail)}`}>Apply by email <ArrowUpRight size={17}/></a>
             ) : (
               <p className="muted">
                 No application link has been provided. Follow the instructions
@@ -637,8 +647,10 @@ function EventDetails() {
     { data, error, loading, reload } = useLoad(`/events/${id}`),
     [show, setShow] = useState(false),
     [confirm, setConfirm] = useState(false);
+  useAvailabilityRefresh(reload,data?.item?.startsAt,data?.item?.registrationDeadline);
+  const item = data?.item, booking=eventAvailability(item);
+  useEffect(()=>{if(!booking.open || item?.registered)setConfirm(false);},[booking.open,item?.registered]);
   if (loading && !data) return <Loading />;
-  const item = data?.item;
   return (
     <>
       <FeedBack/>
@@ -677,7 +689,7 @@ function EventDetails() {
                   >
                     Cancel my registration
                   </Action>
-                ) : (
+                ) : booking.open ? (
                   <Action
                     className="primary"
                     run={async () => {
@@ -686,7 +698,7 @@ function EventDetails() {
                   >
                     Participate in event
                   </Action>
-                ))}
+                ) : <p className="notice" role="status">{booking.label}</p>)}
               {item.mode !== "recap" && (admin(user) || String(item.owner?._id || item.owner) === user._id) && (
                 <button className="primary" onClick={() => setShow(!show)}>
                   Manage participants
@@ -697,11 +709,12 @@ function EventDetails() {
                 your place. Removed registrations free a place immediately.
               </p>}
             </article>
-            {show && <Participants id={id} onChanged={reload} />}
+            {show && <Participants id={id} event={item} onChanged={reload} />}
           </div>
-          {confirm && (
+          {confirm && booking.open && (
             <BookingConfirm
               id={id}
+              event={item}
               onClose={() => setConfirm(false)}
               onBooked={() => {
                 setConfirm(false);
@@ -714,7 +727,7 @@ function EventDetails() {
     </>
   );
 }
-function BookingConfirm({ id, onClose, onBooked }) {
+function BookingConfirm({ id, event, onClose, onBooked }) {
   const { user, setUser } = useAuth();
   return (
     <Modal title="Confirm your participation" onClose={onClose}>
@@ -732,6 +745,8 @@ function BookingConfirm({ id, onClose, onBooked }) {
         initial={{ phone: user.phone || "" }}
         submit="Confirm participation"
         onSubmit={async (values) => {
+          const current=eventAvailability(event);
+          if(!current.open)throw Error(current.label);
           if (values.phone !== user.phone) {
             const r = await api.patch("/users/me", { phone: values.phone });
             setUser(r.data.user);
@@ -743,7 +758,7 @@ function BookingConfirm({ id, onClose, onBooked }) {
     </Modal>
   );
 }
-function Participants({ id, onChanged }) {
+function Participants({ id, event, onChanged }) {
   const [page, setPage] = useState(1),
     [q, setQ] = useState(""),
     [selected, setSelected] = useState(""),
@@ -753,6 +768,8 @@ function Participants({ id, onChanged }) {
     { data: members } = useLoad(
       "/events/" + id + "/member-options?q=" + encodeURIComponent(q),
     );
+  useAvailabilityRefresh(reload);
+  const booking=eventAvailability(event);
   return (
     <section className="card participant-manager">
       <span className="eyebrow">ORGANIZER WORKSPACE</span>
@@ -761,13 +778,13 @@ function Participants({ id, onChanged }) {
         {data?.total || 0} active bookings · removing a participant immediately
         opens a place.
       </p>
-      <div className="participant-add">
+      {booking.open ? <div className="participant-add">
         <label>
           Find an existing member
           <input
             aria-label="Find participant"
             value={q}
-            placeholder="Name, email or university ID"
+            placeholder="Name, Email"
             onChange={(e) => {
               setQ(e.target.value);
               setSelected("");
@@ -792,6 +809,8 @@ function Participants({ id, onChanged }) {
         <Action
           className="primary"
           run={async () => {
+            const current=eventAvailability(event);
+            if(!current.open)throw Error(current.label);
             if (!selected) throw Error("Select a member first");
             await api.post("/events/" + id + "/participants", {
               user: selected,
@@ -804,7 +823,7 @@ function Participants({ id, onChanged }) {
           Add participant
         </Action>
         <small>The member needs a valid phone number in their profile.</small>
-      </div>
+      </div> : <p className="notice" role="status">{booking.label}. New participants cannot be added.</p>}
       <Notice error={error} />
       {loading ? (
         <Loading />
@@ -858,19 +877,28 @@ function DonationPayment({ item, onChanged }) {
     <Form key={selected || "wallet"} initial={{method:selected || wallets[0][0]}} fields={[{name:"method",label:"Payment method",options:wallets.map(([value,label])=>({value,label}))},{name:"amount",label:"Amount paid (BDT)",type:"number",min:1,max:100000000,step:0.01},{name:"reference",label:"Successful transaction ID"}]} submit="Submit donation for review" onSubmit={async values=>{await api.post(`/donations/${item._id}/contributions`,values);setSent(true);onChanged();}} />
   </section>;
 }
-function DonationContributors({ id, onChanged }) {
+function DonationContributors({ id, campaign, onChanged }) {
+  const {user}=useAuth();
   const [page,setPage]=useState(1), {data,error,loading,reload}=useLoad(`/donations/${id}/contributions?page=${page}`);
   useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)reload();},20000);return()=>clearInterval(timer);},[id,page]);
   return <section className="card donation-ledger"><div className="row between"><div><span className="eyebrow">OWNER WORKSPACE · PRIVATE</span><h2>Contributions & payment review</h2></div><button onClick={()=>{reload();onChanged();}}>Refresh</button></div>
     <p>Confirm the payment in your wallet, bank statement or verified gateway record before approving. Pending and rejected payments do not count.</p>
     <div className="donation-review-summary">{["pending","approved","rejected"].map(status=>{const sum=data?.summary.find(x=>x._id===status);return <div key={status}><Status value={status}/><strong>{money(sum?.amount || 0)}</strong><small>{sum?.count || 0} contributions</small></div>;})}</div>
-    <Notice error={error}/>{loading&&!data ? <Loading/> : data?.items.length ? <div className="contributor-list">{data.items.map(row=><article className="contributor-row" key={row._id}><div><strong>{row.user?.name || row.donorName || "Guest donor"}</strong><small>{row.user?.email || row.donorEmail} {row.user?.universityId && `· ID ${row.user.universityId}`}</small><small>{row.user?.phone || row.donorPhone}</small><span>{row.method === "card" ? "Hosted online checkout" : row.method} · {row.reference}</span><small>{date(row.createdAt)} · Payment: {row.paymentStatus || "submitted"}</small></div><div className="contributor-decision"><strong>{money(row.amount)}</strong><Status value={row.status}/>{row.status==="pending" && !["awaiting_gateway","failed"].includes(row.paymentStatus) && <div className="row">{["approved","rejected"].map(status=><Action key={status} run={async()=>{await api.patch(`/contributions/${row._id}`,{status});reload();onChanged();}}>{status==="approved"?"Approve payment":"Reject"}</Action>)}</div>}{row.reviewedAt&&<small>Reviewed {date(row.reviewedAt)}</small>}</div></article>)}</div> : <Empty>No contributions yet.</Empty>}<Pager {...{data,page,setPage}} numbered/>
+    <Notice error={error}/>{loading&&!data ? <Loading/> : data?.items.length ? <div className="contributor-list">{data.items.map(row=><article className="contributor-row" key={row._id}><div><strong>{row.user?.name || row.donorName || "Guest donor"}</strong><small>{row.user?.email || row.donorEmail} {row.user?.universityId && `· ID ${row.user.universityId}`}</small><small>{row.user?.phone || row.donorPhone}</small><span>{row.method === "card" ? "Hosted online checkout" : row.method} · {row.reference}</span><small>{date(row.createdAt)} · Payment: {row.paymentStatus || "submitted"}</small></div><div className="contributor-decision"><strong>{money(row.amount)}</strong><Status value={row.status}/>{canReviewContribution(user,row,campaign) && <div className="row">{["approved","rejected"].map(status=><Action key={status} run={async()=>{await api.patch(`/contributions/${row._id}`,{status});reload();onChanged();}}>{status==="approved"?"Approve payment":"Reject"}</Action>)}</div>}{row.reviewedAt&&<small>Reviewed {date(row.reviewedAt)}</small>}</div></article>)}</div> : <Empty>No contributions yet.</Empty>}<Pager {...{data,page,setPage}} numbered/>
   </section>;
 }
 function DonationDetails() {
   const { id } = useParams(),
     { user } = useAuth(),
     { data, error, loading, reload } = useLoad(`/donations/${id}`);
+  const [clockTick,setClockTick]=useState(0);
+  const deadline=data?.item?.deadline;
+  useEffect(()=>{
+    const remaining=new Date(deadline).getTime()-Date.now();
+    if(!deadline || !Number.isFinite(remaining) || remaining<=0)return;
+    const timer=setTimeout(()=>setClockTick(value=>value+1),Math.min(remaining+1,2147483647));
+    return()=>clearTimeout(timer);
+  },[deadline,clockTick]);
   useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)reload();},20000);return()=>clearInterval(timer);},[id]);
   if (loading && !data) return <Loading />;
   const item = data?.item;
@@ -889,7 +917,7 @@ function DonationDetails() {
             <PostAuthor item={item} />
             <Cover item={item} />
             <ResourceFacts kind="donations" item={item} />
-            <Status value={item.status} />
+            <Status value={item.mode !== "information" && campaignEnded(item) ? "closed" : item.status} />
             {item.mode !== "information" && <div className="donation-progress-panel"><div><span>APPROVED CONTRIBUTIONS</span><h2>{money(data.total)} <small>raised of {money(item.goal)}</small></h2></div><progress value={Math.min(data.total,item.goal)} max={item.goal}/><div className="row between"><strong>{money(Math.max(0,item.goal-data.total))} remaining</strong><span>{Math.min(100,Math.round(data.total/item.goal*100))}% funded</span></div><small>Only reviewed and approved donations are counted.</small></div>}
             <p className="preserve"><LinkedText text={item.description} /></p>
             <ContactNumber
@@ -899,8 +927,9 @@ function DonationDetails() {
             <h3>{item.mode === "information" ? "Official help and contact" : "How to contribute"}</h3>
             <p className="preserve"><LinkedText text={item.instructions} /></p>
           </article>
-          {item.mode !== "information" && item.status === "open" && String(item.owner?._id || item.owner) !== user._id && <DonationPayment item={item} onChanged={reload}/>}
-          {item.mode !== "information" && (admin(user) || String(item.owner?._id || item.owner) === user._id) && <DonationContributors id={id} onChanged={reload}/>}
+          {item.mode !== "information" && campaignEnded(item) && <div className="notice" role="status">Campaign ended. New contributions are no longer accepted.</div>}
+          {canContribute(user,item) && <DonationPayment item={item} onChanged={reload}/>}
+          {item.mode !== "information" && (admin(user) || String(item.owner?._id || item.owner) === user._id) && <DonationContributors id={id} campaign={item} onChanged={reload}/>}
         </>
       )}
     </>
@@ -929,7 +958,7 @@ function Contributions() {
             </div>
             <strong>{money(item.amount)}</strong>
             <Status value={item.status} />
-            {admin(user) && item.status === "pending" && (
+            {canReviewContribution(user,item) && (
               <div className="row">
                 {["approved", "rejected"].map((status) => (
                   <Action

@@ -1,3 +1,4 @@
+import { AppAmbient } from "../components/AppAmbient.jsx";
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, Brand, Form } from "../components/ui.jsx";
@@ -9,7 +10,8 @@ export function Recovery({ mode = "forgot-password" }) {
     );
   const reset = mode === "reset-password";
   return (
-    <main className="recovery-page">
+    <main className="recovery-page ambient-recovery">
+      <AppAmbient variant="subtle" />
       <section className="card recovery-card">
         <Brand />
         <span className="eyebrow">ACCOUNT SECURITY</span>

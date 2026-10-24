@@ -1,3 +1,4 @@
+import { useTheme } from "../lib/theme.js";
 import { FeedBack } from "../components/FeedBack.jsx";
 import { ConversionPage } from "./Conversions.jsx";
 import React, { useEffect, useState, useRef } from "react";
@@ -207,7 +208,7 @@ function PhotoUploader({ onSaved }) {
     setBusy(true);
     try {const data=new FormData();data.append("image",file);const response=await api.post("/users/me/avatar",data);setUser(response.data.user);onSaved?.("Profile picture updated.");}
     catch(e) {setError(errorText(e));} finally {setBusy(false);}
-  }}/><div className="row wrap"><button type="button" disabled={busy} onClick={()=>input.current?.click()}><Camera size={16}/>{busy ? "Uploading picture..." : "Change picture"}</button>{user.avatar && !busy && <Action title="Remove profile picture" aria-label="Remove profile picture" run={async()=>{if(busy)return;const response=await api.delete("/users/me/avatar");setUser(response.data.user);onSaved?.("Profile picture removed.");}}><Trash2 size={15}/></Action>}</div><Notice error={error}/></div>;
+  }}/><div className="row wrap"><button type="button" disabled={busy} onClick={()=>input.current?.click()}><Camera size={16}/>{busy ? "Uploading picture..." : "Edit picture"}</button>{user.avatar && !busy && <Action title="Remove profile picture" aria-label="Remove profile picture" run={async()=>{if(busy)return;const response=await api.delete("/users/me/avatar");setUser(response.data.user);onSaved?.("Profile picture removed.");}}><Trash2 size={15}/></Action>}</div><Notice error={error}/></div>;
 }
 function CollectionEditor({ title, kind, items, onChange }) {
   const [editing, setEditing] = useState(null),
@@ -313,6 +314,7 @@ function CollectionEditor({ title, kind, items, onChange }) {
                   }
             }
             submit="Save entry"
+            onCancel={() => setShow(false)}
             onSubmit={async (values) => {
               if (kind === "workExperience") {
                 values.current = isCurrent;
@@ -333,7 +335,6 @@ function CollectionEditor({ title, kind, items, onChange }) {
               setShow(false);
             }}
           />
-          <button type="button" onClick={()=>setShow(false)}>Cancel</button>
         </Modal>
       )}
     </section>
@@ -357,7 +358,7 @@ export function Profile() {
     setUser(response.data.user); setSaved("Profile updated successfully.");
   };
   return <>
-    <Head title={administrator ? (user.role === "superadmin" ? "Super Admin profile" : "Administrator profile") : user.role === "alumni" ? "Your Alumni profile" : "Your Student profile"} description="Your information, profile and account security.">
+    <Head title={administrator ? (user.role === "superadmin" ? "Super Admin profile" : "Administrator profile") : user.role === "alumni" ? "Your Alumni profile" : "Your Student profile"} description="Your information and community profile.">
       <Link className="button" to={"/app/members/"+user._id}>View profile <ArrowUpRight size={15}/></Link>
     </Head>
     {saved && <div className="success" role="status">{saved}</div>}
@@ -379,17 +380,30 @@ export function Profile() {
       </dl><p>{administrator ? "Access permissions follow your administrator role." : "University identity is managed by your Administrator."}</p>
       {!administrator && <button type="button" className="profile-conversion-trigger" onClick={()=>setPanel("conversion")}><GraduationCap size={16}/>Alumni conversion<ArrowUpRight size={14}/></button>}
       </section>
-      <section className="card"><h2>Account security</h2><p>Update your password securely. Other sessions will be signed out.</p><button type="button" onClick={()=>setPanel("password")}>Change password</button></section>
+
     </aside></div>
 
     {panel === "conversion" && !administrator && <Modal title="Alumni conversion" onClose={closeConversion}><ConversionPage/></Modal>}
-    {panel === "information" && <Modal title={administrator ? "Edit administrative information" : "Edit personal information"} onClose={()=>setPanel(null)}><p className="profile-visibility-note"><Globe size={15}/>These details appear on your profile for signed-in community members.</p><Form fields={fields} initial={{...user,skills:user.skills?.join(", "),mentoring:String(user.mentoring),contactPreference:user.contactPreference || "request-first"}} submit="Save changes" onSubmit={async values=>{
+    {panel === "information" && <Modal title={administrator ? "Edit administrative information" : "Edit personal information"} onClose={()=>setPanel(null)}><p className="profile-visibility-note"><Globe size={15}/>These details appear on your profile for signed-in community members.</p><Form onCancel={()=>setPanel(null)} fields={fields} initial={{...user,skills:user.skills?.join(", "),mentoring:String(user.mentoring),contactPreference:user.contactPreference || "request-first"}} submit="Save changes" onSubmit={async values=>{
       if (!administrator) values.skills=(values.skills || "").split(",").map(v=>v.trim()).filter(Boolean);
       const response=await api.patch("/users/me",values);setUser(response.data.user);setPanel(null);setSaved("Information updated successfully.");
-    }}/><button type="button" onClick={()=>setPanel(null)}>Cancel</button></Modal>}
+    }}/></Modal>}
     {panel === "contact" && user.role === "alumni" && <Modal title="Mentorship and contact preference" onClose={()=>setPanel(null)}><ContactPreferences onSaved={()=>{setPanel(null);setSaved("Contact preference updated.");}}/></Modal>}
-    {panel === "password" && <Modal title="Change password" onClose={()=>setPanel(null)}><Form fields={[{name:"currentPassword",label:"Current password",type:"password"},{name:"password",label:"New password (minimum 8 characters)",type:"password",minLength:8}]} submit="Update password" onSubmit={async values=>{await api.put("/auth/password",values);setPanel(null);setSaved("Password changed successfully.");}}/><button type="button" onClick={()=>setPanel(null)}>Cancel</button></Modal>}
+
   </>;
+}
+export function SettingsPage() {
+  const { theme, toggleTheme } = useTheme();
+  const [panel,setPanel]=useState(null), [saved,setSaved]=useState("");
+  return <section className="account-settings-page">
+    <Head title="Settings" description="Account security and appearance."/>
+    {saved && <div className="success" role="status">{saved}</div>}
+    <div className="account-settings-cards">
+      <section className="card account-setting-card"><span className="account-setting-icon"><ShieldCheck size={22}/></span><div><h2>Change password</h2><p>Update your password securely. Other sessions will be signed out.</p><button type="button" onClick={()=>setPanel("password")}>Change password</button></div></section>
+      <section className="card account-setting-card"><span className="account-setting-icon"><Globe size={22}/></span><div><h2>Appearance</h2><p>Choose a theme for the whole project. Your choice stays saved on this browser.</p><div className="settings-theme-options" role="group" aria-label="Theme mode">{[["dark","Dark"],["blue","Deep Blue"]].map(([value,label])=><button type="button" key={value} aria-pressed={theme===value} onClick={()=>{if(theme!==value)toggleTheme();}}><span className={"theme-swatch theme-swatch-"+value} aria-hidden="true"/>{label}{theme===value && <Check size={16}/>}</button>)}</div></div></section>
+    </div>
+    {panel === "password" && <Modal title="Change password" onClose={()=>setPanel(null)}><Form onCancel={()=>setPanel(null)} fields={[{name:"currentPassword",label:"Current password",type:"password"},{name:"password",label:"New password (minimum 8 characters)",type:"password",minLength:8}]} submit="Update password" onSubmit={async values=>{await api.put("/auth/password",values);setPanel(null);setSaved("Password changed successfully.");}}/></Modal>}
+  </section>;
 }
 export function MemberProfile() {
   const navigate = useNavigate();

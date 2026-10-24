@@ -92,7 +92,7 @@ export function bulkMemberRoutes() {
         )
           row.errors.push({
             field: "identity",
-            message: "Email or University ID is already reserved by an account",
+            message: "Email is already reserved by an account",
           });
         const matches = verified.filter(
           (u) => u.email === v.email || u.universityId === v.universityId,

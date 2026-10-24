@@ -78,7 +78,7 @@ export function ActivityPage() {
           <input
             type="search"
             maxLength={100}
-            placeholder="Name, email or university ID…"
+            placeholder="Name, Email…"
             value={q}
             onChange={(e) => {
               setQ(e.target.value);

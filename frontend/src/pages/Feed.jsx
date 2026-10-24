@@ -3,6 +3,7 @@ import { useFeedCache } from "./useFeedCache.js";
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useParams, useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import {
+  Code2, Building2, FlaskConical, Palette, GraduationCap, Activity, Trophy, Leaf, Check,
   CalendarDays,
   HeartHandshake,
   BriefcaseBusiness,
@@ -38,63 +39,57 @@ import {
   date,
   errorText,
 } from "../components/ui.jsx";
-function Interests({ onSaved }) {
-  const { user, setUser } = useAuth(),
-    { data } = useLoad("/feed/options"),
-    [selected, setSelected] = useState(user.interests || []),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [saved, setSaved] = useState(false);
-  return (
-    <section className="card interest-card">
-      <span className="eyebrow">MAKE IT YOURS</span>
-      <h2>
-        <SlidersHorizontal size={19} /> Your interests
-      </h2>
-      <p>
-        Choose what moves you. Unseen matching posts appear first in For you.
-      </p>
-      <div className="topic-picker">
-        {data?.topics.map((topic) => (
-          <button
-            key={topic}
-            aria-pressed={selected.includes(topic)}
-            onClick={() => {
-              setSaved(false);
-              setSelected((v) =>
-                v.includes(topic)
-                  ? v.filter((t) => t !== topic)
-                  : [...v, topic],
-              );
-            }}
-          >
-            {topic}
-          </button>
-        ))}
-      </div>
-      <Notice error={error} />
-      <button
-        className="primary"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          setError("");
-          try {
-            const r = await api.patch("/users/me", { interests: selected });
-            setUser(r.data.user);
-            setSaved(true);
-            onSaved();
-          } catch (e) {
-            setError(errorText(e));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        {busy ? "Saving…" : saved ? "Interests updated" : "Save interests"}
-      </button>
-    </section>
-  );
+const interestDetails = {
+  Technology: [Code2, "Software, innovation and digital skills"],
+  Careers: [BriefcaseBusiness, "Jobs, internships and career guidance"],
+  Business: [Building2, "Entrepreneurship and industry insights"],
+  Science: [FlaskConical, "Research and scientific discoveries"],
+  "Arts & Culture": [Palette, "Creativity, culture and campus life"],
+  Education: [GraduationCap, "Learning and academic opportunities"],
+  Health: [Activity, "Wellbeing and health initiatives"],
+  Sports: [Trophy, "Sports and team activities"],
+  Community: [HeartHandshake, "Connections and community updates"],
+  Environment: [Leaf, "Sustainability and environmental action"],
+};
+function Interests({ onSaved, onCancel }) {
+  const { user, setUser } = useAuth();
+  const { data, loading, error: optionsError, reload } = useLoad("/feed/options");
+  const [selected, setSelected] = useState(user.interests || []);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
+  const guidance = {
+    student: "Choose the topics you want to learn about and explore.",
+    alumni: "Choose topics that support your professional and community interests.",
+    admin: "Personalize your feed. Your moderation access stays unchanged.",
+    superadmin: "Personalize your feed. Platform oversight stays unchanged.",
+  }[user.role];
+  return <form className="interest-editor" aria-busy={busy} onSubmit={async event => {
+    event.preventDefault();
+    if(saving.current || loading || optionsError || !data?.topics?.length) return;
+    saving.current=true; setBusy(true); setError("");
+    try {
+      const response=await api.patch("/users/me",{interests:selected.filter(topic=>data.topics.includes(topic))});
+      setUser(response.data.user); onSaved();
+    } catch(e) { setError(errorText(e)); }
+    finally { saving.current=false; setBusy(false); }
+  }}>
+    <div className="interest-intro"><span className="interest-intro-icon"><Sparkles size={22}/></span><div><span className="eyebrow">YOUR FOR YOU FEED</span><p>{guidance}</p></div></div>
+    <Notice error={optionsError || error} onRetry={optionsError ? reload : undefined}/>
+    {loading && !data ? <Loading/> : <fieldset disabled={busy} className="interest-fields">
+      <legend className="sr-only">Choose your interests</legend>
+      <div className="interest-selection-summary"><span>{selected.length ? selected.length+" selected" : "All topics"}</span><button type="button" disabled={!selected.length} onClick={()=>setSelected([])}>Clear selection</button></div>
+      <div className="interest-options">{data?.topics.map(topic=>{
+        const [Icon,description]=interestDetails[topic] || [Newspaper,"Community posts and updates"];
+        const active=selected.includes(topic);
+        return <button className="interest-option" type="button" key={topic} aria-pressed={active} onClick={()=>setSelected(current=>current.includes(topic)?current.filter(value=>value!==topic):[...current,topic])}>
+          <span className="interest-option-icon"><Icon size={19}/></span><span><strong>{topic}</strong><small>{description}</small></span><span className="interest-option-check">{active && <Check size={14}/>}</span>
+        </button>;
+      })}</div>
+      <p className="interest-explanation">{selected.length ? "Recommended shows unseen posts matching your choices. Use All posts to browse everything." : "No topics selected: Recommended shows unseen posts from all topics."} Saved only for your account.</p>
+      <div className="interest-actions"><button type="button" onClick={onCancel}>Cancel</button><button className="primary" type="submit" disabled={loading || !!optionsError || !data?.topics?.length}>{busy ? "Saving…" : "Save preferences"}</button></div>
+    </fieldset>}
+  </form>;
 }
 function Comments({ post, onChanged }) {
   const { user } = useAuth(),
@@ -455,15 +450,15 @@ export function Feed() {
     [windowBusy,setWindowBusy] = useState(false), [windowError,setWindowError] = useState(""),
     [visibility, setVisibility] = useState(initial?.visibility || "hidden"),
     [compose, setCompose] = useState(false), [interests, setInterests] = useState(false),
-    [creating, setCreating] = useState(false), [topic, setTopic] = useState("Community"),
+    [creating, setCreating] = useState(false), [topic, setTopic] = useState("Community"), [draftLength,setDraftLength]=useState(0),
     [refreshed, setRefreshed] = useState("");
   const feedUrl = (value, nextPage = page) => cutoff ? `/feed?mode=${value === "for-you" && order === "newest" ? "latest" : value}&visibility=${visibility}&page=${nextPage}&cutoff=${encodeURIComponent(cutoff)}` : null;
-  const { data, error, loading, refreshing, reload, prefetch, updateFavorite } = useFeedCache(feedUrl(mode), `${user._id}:${user.role}`);
+  const { data, error, loading, refreshing, reload, prefetch, updateFavorite } = useFeedCache(feedUrl(mode), `${user._id}:${user.role}:${JSON.stringify([...(user.interests || [])].sort())}`);
   const { data: options, error:optionsError } = useLoad("/feed/options");
   useEffect(()=>{if(!cutoff && options?.feedCutoff) setCutoff(options.feedCutoff);},[cutoff,options]);
   const refresh = async () => {
     setWindowBusy(true);setWindowError("");
-    try {const response=await api.get("/feed/options");setCutoff(response.data.feedCutoff);setPage(1);reload();setRefreshed(new Date().toLocaleTimeString());}
+    try {const response=await api.get("/feed/options");setCutoff(response.data.feedCutoff);setPage(1);reload({keepPrevious:true});setRefreshed(new Date().toLocaleTimeString());}
     catch(e){setWindowError(errorText(e));} finally{setWindowBusy(false);}
   };
   const selectMode = value => { setMode(value); setPage(1); };
@@ -489,27 +484,37 @@ export function Feed() {
       <div className="feed-tabs" role="group" aria-label="Newsfeed order">
         {[["for-you", "For you", Sparkles], ["favorites", "Favorites", Bookmark], ["viewed", "Viewed", Eye]].map(([value,label,Icon]) => <button key={value} aria-pressed={mode === value} className={mode === value ? "selected" : ""} onMouseEnter={() => prefetch(feedUrl(value, 1))} onFocus={() => prefetch(feedUrl(value, 1))} onClick={() => selectMode(value)}><Icon size={16}/>{label}</button>)}
       </div>
-      {mode === "for-you" && <label className="feed-order"><select aria-label="For you sorting" value={order} onChange={e => {setOrder(e.target.value);setPage(1);}}><option value="recommended">Recommended</option><option value="newest">Newest</option></select></label>}
+      {mode === "for-you" && <label className="feed-order"><select aria-label="For you sorting" value={order} onChange={e => {setOrder(e.target.value);setPage(1);}}><option value="recommended">Recommended · Unseen</option><option value="newest">All posts · Newest first</option></select></label>}
       {refreshed && <small className="feed-refreshed" role="status">Updated {refreshed}</small>}
     </div>
       <div className="refined-feed-tools">
         <button aria-label="Update interests" title="Interests" onClick={() => setInterests(true)}><SlidersHorizontal size={18}/><span>Interests</span></button>
         {admin(user) && <button aria-label={user.role === "superadmin" ? "Content oversight" : "Moderation"} title={user.role === "superadmin" ? "Content oversight" : "Moderation"} aria-pressed={moderation} onClick={() => selectMode(moderation ? "for-you" : "moderation")}><Eye size={18}/><span>{user.role === "superadmin" ? "Oversight" : "Moderation"}</span></button>}
-        <button className="primary" aria-label={admin(user) ? "Post update" : "Create post"} onClick={() => user.role === "alumni" ? setCreating(true) : setCompose(true)}><Plus size={18}/><span>{admin(user) ? "Post update" : "Create post"}</span></button>
+        <button className="primary feed-publish-trigger" aria-label={admin(user) ? "Post update" : "Create post"} onClick={() => {setDraftLength(0);user.role === "alumni" ? setCreating(true) : setCompose(true);}}><Plus size={18}/><span>{admin(user) ? "Post update" : "Create post"}</span></button>
         <button aria-label="Refresh newsfeed" title="Refresh feed" disabled={refreshing || windowBusy} onClick={refresh}><RefreshCw size={18} className={refreshing || windowBusy ? "feed-refreshing" : ""}/></button>
       </div>
     </header>
     {moderation && <div className="refined-moderation-filter"><label>Show<select aria-label="Moderation visibility" value={visibility} onChange={e => {setVisibility(e.target.value);setPage(1);}}>{["hidden","archived","published"].map(v => <option key={v} value={v}>{v}</option>)}</select></label><small>{user.role === "superadmin" ? "Review, edit or moderate community posts." : "Review visibility and moderate posts. Authors manage their content."}</small></div>}
     <main className="feed-stream">
       <Notice error={error || windowError || optionsError}/>
-      {loading ? <div className="feed-skeleton-list" role="status" aria-label="Loading posts">{[1,2].map(n => <div className="feed-skeleton" key={n}><div className="skeleton-author"/><div className="skeleton-line"/><div className="skeleton-line short"/><div className="skeleton-image"/></div>)}</div> : data?.items.length ? data.items.map(post => <FeedCard key={`${post.kind}-${post._id}`} post={post} fromFeed onChanged={reload} onFavoriteChanged={(kind,id,favorite)=>{updateFavorite(kind,id,favorite);if(mode === "favorites" && !favorite && data.items.length === 1 && page > 1) setPage(page-1);}}/>) : <Empty>{moderation ? "No posts match this visibility." : mode === "viewed" ? "Posts you have seen will appear here." : mode === "favorites" ? "No favorites yet. Bookmark a post to find it here." : mode === "for-you" && order === "recommended" ? "No unseen posts right now. Choose Newest to browse all posts, or refresh for updates." : "No posts yet."}</Empty>}
+      {loading ? <div className="feed-skeleton-list" role="status" aria-label="Loading posts">{[1,2].map(n => <div className="feed-skeleton" key={n}><div className="skeleton-author"/><div className="skeleton-line"/><div className="skeleton-line short"/><div className="skeleton-image"/></div>)}</div> : data?.items.length ? data.items.map(post => <FeedCard key={`${post.kind}-${post._id}`} post={post} fromFeed onChanged={reload} onFavoriteChanged={(kind,id,favorite)=>{updateFavorite(kind,id,favorite);if(mode === "favorites" && !favorite && data.items.length === 1 && page > 1) setPage(page-1);}}/>) : <Empty>{moderation ? "No posts match this visibility." : mode === "viewed" ? "Posts you have seen will appear here." : mode === "favorites" ? "No favorites yet. Bookmark a post to find it here." : mode === "for-you" && order === "recommended" ? <span className="feed-caught-up"><strong>No unseen recommendations right now.</strong><span>Update your interests, browse all posts or refresh for new updates.</span><button type="button" onClick={()=>{setOrder("newest");setPage(1);}}>Browse all posts <ArrowUpRight size={15}/></button></span> : "No posts yet."}</Empty>}
       {!loading && data?.total > 20 && <Pager {...{data,page,setPage}} numbered/>}
     </main>
-    {interests && <Modal title="Your interests" onClose={() => setInterests(false)}><Interests onSaved={() => {setInterests(false);selectMode("for-you");refresh();}}/></Modal>}
-    {creating && <Modal title="Share with your community" onClose={() => setCreating(false)}><div className="feed-create-options"><button className="button" type="button" onClick={()=>{setCreating(false);setCompose(true);}}>Community update<Newspaper size={16}/></button>{[["jobs","Career opportunity"],["events","Event"],["donations","Donation or help"]].map(([kind,label]) => <Link className="button" key={kind} to={`/app/${kind}?create=true`}>{label}<ArrowUpRight size={16}/></Link>)}</div></Modal>}
-    {compose && <Modal title={admin(user) ? "Post a university update" : "Share a community update"} onClose={() => setCompose(false)}>
-      <label>Topic<select value={topic} onChange={e => setTopic(e.target.value)}>{(options?.topics || ["Community"]).map(t => <option key={t}>{t}</option>)}</select></label>
-      <Form fields={[{name:"body",label:"Your update",area:true,max:5000}]} submit="Publish post" onSubmit={async v => {await api.post("/posts",{...v,topics:[topic]});setCompose(false);refresh();}}/>
+    {interests && <Modal title="Your interests" onClose={() => setInterests(false)}><Interests onCancel={()=>setInterests(false)} onSaved={() => {setInterests(false);setOrder("recommended");selectMode("for-you");refresh();}}/></Modal>}
+    {creating && <Modal title="Share with your community" onClose={() => setCreating(false)}>
+      <div className="feed-publish-identity"><Avatar user={user}/><div><strong>{user.name}</strong><span>Alumni · Your university community</span></div></div>
+      <div className="feed-create-options feed-publish-choices">
+        <button type="button" onClick={()=>{setCreating(false);setCompose(true);}}><Newspaper size={21}/><span><strong>Community update</strong><small>Share your experience or a useful update.</small></span><ArrowUpRight size={16}/></button>
+        {[["jobs","Career opportunity","Share a job or internship.",BriefcaseBusiness],["events","Event","Bring your community together.",CalendarDays],["donations","Give back","Share a fundraising or help campaign.",HeartHandshake]].map(([kind,label,description,Icon])=><Link key={kind} to={`/app/${kind}?create=true`} onClick={()=>setCreating(false)}><Icon size={21}/><span><strong>{label}</strong><small>{description}</small></span><ArrowUpRight size={16}/></Link>)}
+      </div>
+    </Modal>}
+    {compose && <Modal title={admin(user) ? user.role === "superadmin" ? "Publish a platform update" : "Post a university update" : user.role === "alumni" ? "Share your experience" : "Share a community update"} onClose={() => setCompose(false)}>
+      <div className={`feed-publish-panel publisher-${user.role}`} onInput={event=>{if(event.target.name === "body")setDraftLength(event.target.value.length);}}>
+        <div className="feed-publish-identity"><Avatar user={user}/><div><strong>{user.name}</strong><span>{({student:"Student",alumni:"Alumni",admin:"Administrator",superadmin:"Super Admin"})[user.role]} · University community</span></div><span className="feed-publish-kind">Community update</span></div>
+        <p className="feed-publish-guidance">{({student:"Share a campus moment, a question or something useful.",alumni:"Share your experience and insights with your university community.",admin:"Share a university announcement or a useful campus update.",superadmin:"Share a platform announcement with your university community."})[user.role]}</p>
+        <Form fields={[{name:"body",label:"Your update",area:true,max:5000,placeholder:"What would you like to share?"},{name:"topic",label:"Topic",options:options?.topics?.length ? options.topics : ["Community"]}]} initial={{topic:options?.topics?.includes(topic) ? topic : options?.topics?.[0] || "Community"}} submit="Publish post" onSubmit={async v => {await api.post("/posts",{body:v.body,topics:[v.topic]});setTopic(v.topic);setCompose(false);refresh();}}/>
+        <div className="feed-publish-footer"><span>Visible to signed-in community members</span><span>{draftLength.toLocaleString()} / 5,000</span></div>
+      </div>
     </Modal>}
   </section>;
 }

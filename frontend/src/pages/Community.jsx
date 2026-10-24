@@ -94,12 +94,12 @@ function Login() {
         <span className="eyebrow">WELCOME TO YOUR COMMUNITY</span>
         <h1>Good to see you again.</h1>
         <p>
-          Sign in with the email or university ID and password provided by your
+          Sign in with the Email and password provided by your
           Administrator.
         </p>
         <Form
           fields={[
-            { name: "identifier", label: "Email or university ID" },
+            { name: "identifier", label: "Email" },
             { name: "password", type: "password" },
           ]}
           submit="Sign in"
@@ -131,7 +131,10 @@ function Dashboard() {
   }[user.role];
   if (loading) return <Loading />;
   return (
-    <div className="overview-compact">
+    <div className={`overview-compact dashboard-role-${user.role}`}>
+      <div className="dashboard-hero-scene overview-page-orbit welcome-background-orbit" aria-hidden="true">
+        <NetworkScene CenterIcon={roleHero.Icon} label={roleHero.orbit}/>
+      </div>
       <Notice error={error} />
       <section className={`dashboard-ambient-hero dashboard-role-${user.role}`}>
         <div className="dashboard-hero-copy">
@@ -140,9 +143,7 @@ function Dashboard() {
           <p>{roleHero.text}</p>
           <Link className="button primary" to={roleHero.path}>{roleHero.label}<ArrowUpRight size={17}/></Link>
         </div>
-        <div className="dashboard-hero-scene welcome-background-orbit" aria-hidden="true">
-          <NetworkScene CenterIcon={roleHero.Icon} label={roleHero.orbit}/>
-        </div>
+
       </section>
       <div className="stats-grid">
         {[
@@ -446,8 +447,9 @@ function Messages() {
             <div className="inbox-heading"><span className="eyebrow">YOUR INNER CIRCLE</span><h3>{admin(user) ? "Administrators" : "Conversations"} <small>{admin(user) ? data?.contacts?.length || 0 : data?.items.length || 0}</small></h3><input aria-label="Search conversations" placeholder="Find a connection…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
             {admin(user) ? <AdministratorContacts {...{data,search,id}} onOpened={reload}/> : data?.items.length ? (
               data.items.filter(item => [item.counterpart?.name,item.student?.name,item.mentor?.name,item.title].join(" ").toLowerCase().includes(search.toLowerCase())).map((item) => {
-                const other =
-                  String(item.student?._id) === user._id ? item.mentor : item.student;
+                const other = item.type === "direct"
+                  ? item.counterpart
+                  : String(item.student?._id) === String(user._id) ? item.mentor : item.student;
                 return (
                   <NavLink key={item._id} to={`/app/messages/${item._id}`}>
                     <Avatar user={other} />

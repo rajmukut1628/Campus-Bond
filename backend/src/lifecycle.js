@@ -53,7 +53,7 @@ export async function provisionMember(req, config) {
         ],
       }).session(s)),
       409,
-      "This email or university ID already belongs to an account",
+      "This Email already belongs to an account",
     );
     item = await VerifiedUser.findOne({
       $or: [{ email: req.body.email }, { universityId: req.body.universityId }],

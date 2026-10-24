@@ -203,6 +203,9 @@ export function feedRoutes() {
               }
             : { "interaction.viewedAt": { $exists: false } },
         });
+      // Preferences apply only to personal recommendations, never history or moderation.
+      if (mode === "for-you" && req.user.interests?.length)
+        pipeline.push({ $match: { topics: { $in: req.user.interests } } });
       if (mode === "favorites") pipeline.push({ $match: { "interaction.favoritedAt": { $exists: true } } }, { $addFields: { savedAt: { $max: "$interaction.favoritedAt" } } });
       if (mode === "viewed")
         pipeline.push({

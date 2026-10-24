@@ -6,7 +6,7 @@ A university community app for students, alumni and administrators. Built with R
 
 Run `npm install`, `npm install --prefix frontend` and `npm install --prefix backend`. Copy `backend/.env.example` to `backend/.env` and fill in your MongoDB URI, JWT secret and frontend origin. Use Atlas or a replica set.
 
-Start with `npm run dev` (frontend: 5173, API: 4000). `npm run dev:local` uses a temporary local database. Run `npm test` and `npm run build` before pushing.
+Start with `npm run dev` (frontend: 5173, API: 4000). The launcher runs Node directly, so Windows does not need a terminal PATH workaround. Database outages return 503 while startup retries; TLS verification stays enabled. `npm run dev:local` uses a temporary local database. Run `npm test` and `npm run build` before pushing.
 
 ## Deployment
 

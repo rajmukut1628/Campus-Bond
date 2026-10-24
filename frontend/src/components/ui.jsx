@@ -333,6 +333,7 @@ function Form({
               aria-invalid={!!invalid[f.name]}
               aria-describedby={invalid[f.name] ? `${formId}-${f.name}-error` : undefined}
               minLength={f.minLength}
+              placeholder={f.placeholder}
               maxLength={f.max || 8000}
               required={!f.optional}
               defaultValue={initial[f.name] || ""}

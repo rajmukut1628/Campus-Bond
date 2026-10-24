@@ -215,7 +215,7 @@ export function managementRoutes(config) {
               ],
             }).session(s)),
             409,
-            "An account already uses this email or university ID",
+            "An account already uses this Email",
           );
         Object.assign(item, pick(req.body, [...identity, "role"]));
         if (user) {

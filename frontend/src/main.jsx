@@ -1,9 +1,11 @@
+import { AccountMenu } from "./components/AccountMenu.jsx";
+import { AppAmbient } from "./components/AppAmbient.jsx";
 import "./theme.css";
 import { canAccessRoute } from "./route-access.js";
 import { Landing } from "./pages/Landing.jsx";
 import { Feed, FeedPost } from "./pages/Feed.jsx";
 import { Recovery } from "./pages/Recovery.jsx";
-import { Profile, MemberProfile } from "./pages/Profiles.jsx";
+import { Profile, MemberProfile, SettingsPage } from "./pages/Profiles.jsx";
 import {
   ConversionReview,
   ConversationArchive,
@@ -198,36 +200,9 @@ function Shell() {
             </>
           )}
         </nav>
-        <div className="sidebar-bottom">
-          <NavLink to="/app/profile" title="Profile & settings" aria-label="Profile & settings" onClick={() => setOpen(false)}>
-            <Settings size={18} />
-            <span className="nav-label">Profile & settings</span>
-          </NavLink>
-          <Action
-            aria-label="Sign out"
-            title="Sign out"
-            run={async () => {
-              await api.post("/auth/logout");
-              setUser(null);
-              window.location.replace("/");
-            }}
-          >
-            <LogOut size={18} />
-            <span className="nav-label">Sign out</span>
-          </Action>
-          <div className="user-chip">
-            <Avatar user={user} />
-            <div>
-              <strong>{user.name}</strong>
-              <small>
-                {user.role === "superadmin" ? "Super admin" : user.role}
-              </small>
-            </div>
-            <span className="online" />
-          </div>
-        </div>
       </aside>
       <div className={`main-shell ${location.pathname.replace(/\/$/, "") === "/app" ? "overview-shell" : location.pathname === "/app/notifications" ? "notifications-shell" : location.pathname.startsWith("/app/messages") ? "messages-shell" : location.pathname.startsWith("/app/members/") ? "public-profile-shell" : location.pathname === "/app/feed" ? "feed-shell" : ""}`}>
+        <AppAmbient />
         <header className="topbar">
           <button
             className="mobile-menu"
@@ -249,7 +224,8 @@ function Shell() {
                   verified: "Verified accounts",
                   admins: "Manage admins",
                   activity: "Activity",
-                  profile: "Profile & settings",
+                  profile: "Profile",
+                  settings: "Settings",
                 }[location.pathname.split("/")[2]] ||
                 "Account"}
             </strong>
@@ -266,9 +242,7 @@ function Shell() {
               <Bell size={20} />
               {unread > 0 && <span className="notification-badge">{unread > 99 ? "99+" : unread}</span>}
             </Link>
-            <Link to="/app/profile">
-              <Avatar user={user} />
-            </Link>
+            <AccountMenu key={`${user._id}:${user.role}`} />
           </div>
         </header>
         <main className="content">
@@ -293,6 +267,7 @@ function Shell() {
             <Route path="donations/:id" element={<DonationDetails />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="settings" element={<SettingsPage key={`${user._id}:${user.role}`} />} />
             <Route path="members/:id" element={<MemberProfile />} />
             <Route
               path="archives/:id"

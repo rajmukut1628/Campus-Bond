@@ -2066,3 +2066,18 @@
 @keyframes welcome-login-glow-light { 0%,100% { box-shadow: 0 0 0 3px #087f6812,0 5px 20px #087f682b; } 50% { box-shadow: 0 0 0 5px #087f681a,0 5px 26px #087f6838; } }
 @keyframes welcome-login-sheen { 0%,65% { transform: translateX(-130%); } 85%,100% { transform: translateX(130%); } }
 @media (prefers-reduced-motion: reduce) { .welcome .welcome-header .welcome-nav-login, .welcome .welcome-header .welcome-nav-login::before { animation: none; } }
+
+/* Keep the sign-in brand core as legible as the landing core. */
+@media(min-width:901px) {
+  .login-background-scene .welcome-universe { opacity:1; }
+  .login-background-scene .welcome-core {
+    opacity:1; width:140px; height:140px; margin-left:-70px; margin-top:-70px;
+    border-radius:32px; border:1px solid var(--nub-8bd5bf66,#8bd5bf66);
+    background:linear-gradient(140deg,var(--nub-2c6b5580,#2c6b5580),var(--nub-183f4670,#183f4670));
+    box-shadow:0 0 55px var(--nub-7ee2bf25,#7ee2bf25),inset 0 1px 0 var(--nub-c5ffdd40,#c5ffdd40);
+  }
+  .login-background-scene .welcome-core > svg { width:41px; height:41px; }
+  .login-background-scene .welcome-core strong { font-size:13px; letter-spacing:1.7px; }
+  .login-background-scene .welcome-orbit,.login-background-scene .welcome-orbit-traveler,.login-background-scene .welcome-star { opacity:.55; }
+  .login-background-scene .welcome-core-halo { opacity:.45; }
+}

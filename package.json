@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev": "node backend/scripts/dev.mjs",
     "build": "npm run build --prefix frontend",
     "test": "npm run test --prefix backend",
     "start": "npm start --prefix backend",
     "seed": "npm run seed --prefix backend",
-    "dev:local": "concurrently \"npm run dev:local --prefix backend\" \"npm run dev --prefix frontend\""
+    "dev:local": "node backend/scripts/dev.mjs --local"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
